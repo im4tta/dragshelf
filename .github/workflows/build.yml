@@ -1,4 +1,4 @@
-name: Build macOS app
+name: Build and release Windows and macOS
 
 on:
   push:
@@ -66,11 +66,41 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
-      - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build portable Windows executable
+        shell: cmd
+        run: |
+          mkdir dist
+          cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS windows\DragShelf-source.cpp /Fe:dist\DragShelf-1.0.0-windows-x64.exe /Fo:dist\DragShelf.obj /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib shell32.lib shlwapi.lib ole32.lib oleaut32.lib uuid.lib advapi32.lib comctl32.lib msimg32.lib ws2_32.lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DragShelf-Windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+  release:
+    needs: [mac, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DragShelf-*
+          path: dist
+          merge-multiple: true
+      - name: Attach Windows and macOS builds to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.dmg
             dist/*.zip
+            dist/*.exe
+          fail_on_unmatched_files: true
           generate_release_notes: true

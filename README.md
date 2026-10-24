@@ -2,7 +2,7 @@
 
 <img src="docs/screenshots/icon.png" width="128" alt="Drag Shelf icon">
 
-# Drag Shelf for macOS
+# Drag Shelf for Windows and macOS
 
 **A temporary shelf for the files, links, text and images you're moving around.**
 Start dragging, shake the mouse, drop it on the shelf, grab it again when you need it.
@@ -17,7 +17,11 @@ Apple Silicon · Intel · Universal &nbsp;|&nbsp; macOS 11+ &nbsp;|&nbsp; MIT li
 
 ## Download
 
-Grab the build for your Mac from the **[Releases](../../releases)** page:
+Grab the build for your computer from the **[Releases](../../releases)** page.
+
+**Windows 10/11 (x64):** download and run `DragShelf-1.0.0-windows-x64.exe`. This is the portable native Windows app; no installer is required. Its default shortcut is **Ctrl+Shift+F**.
+
+**macOS:** choose the build for your Mac:
 
 | Mac | File |
 |---|---|
@@ -132,7 +136,7 @@ npm run dist:universal   # → dist/DragShelf-<v>-mac-universal.dmg
 
 ### GitHub Actions
 
-`.github/workflows/build.yml` runs the self-test on Linux and builds **x64, arm64 and universal** DMG/ZIPs on a macOS runner. Push a tag to publish a release:
+`.github/workflows/build.yml` runs the self-test on Linux, builds the native **Windows x64 EXE** with MSVC, and builds **x64, arm64 and universal** DMG/ZIPs on a macOS runner. Both platform builds must succeed before their files are attached to one release. Push a tag to publish a release:
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
