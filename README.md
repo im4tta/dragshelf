@@ -60,6 +60,8 @@ To notice that you are *dragging something and shaking the mouse*, Drag Shelf ne
 
 ## Features
 
+**English + ភាសាខ្មែរ:** switch instantly using the tray/menu-bar **Language / ភាសា** menu or the language selector in the welcome guide. Khmer includes an offline font, localized dates and numbers, menus, onboarding, phone uploads and errors. Existing filenames and shelf names are preserved. Long shelf names wrap rather than being shortened with an ellipsis. [ការណែនាំជាភាសាខ្មែរ](docs/KHMER.md)
+
 | | |
 |---|---|
 | **Shake / edge trigger** | Pops up only while you really drag something (the system drag pasteboard is checked – dragging a window or selecting text won't trigger it). *Strict drag detection* can be turned off. |

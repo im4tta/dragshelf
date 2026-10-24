@@ -7,39 +7,40 @@
 </head>
 <body>
   <div id="drag"></div>
+  <select class="language-picker" data-language-select aria-label="Language / ភាសា"><option value="en">English</option><option value="km">ភាសាខ្មែរ</option></select>
   <div class="wrap">
     <div class="stage" id="stage">
 
       <!-- 1 · drag a file, then shake -->
       <div class="scene" data-p="0">
-        <div class="chip c-shake"><div class="t"></div><span>Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
+        <div class="chip c-shake"><div class="t"></div><span data-i18n="sampleDraft">Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
         <div class="trail"><i></i><i></i><i></i></div>
-        <div class="mini m-appear"><div class="mh"><b>Shelf 1</b><em>0/0</em></div><div class="mz">Drop files here</div></div>
+        <div class="mini m-appear"><div class="mh"><b data-i18n="shelf">Shelf 1</b><em>0/0</em></div><div class="mz" data-i18n="dropHere">Drop files here</div></div>
       </div>
 
       <!-- 2 · drop it on the shelf -->
       <div class="scene" data-p="1">
-        <div class="mini m-glow right"><div class="mh"><b>Shelf 1</b><em>1/1</em></div><div class="mz z2">Drop files here</div>
-          <div class="mrow r-in"><div class="t"></div><div><div class="n">Q4 goals draft</div><div class="s">PDF · 2.4 MB · Oct 23, 15:06</div></div><u></u></div></div>
-        <div class="chip c-fly"><div class="t"></div><span>Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
+        <div class="mini m-glow right"><div class="mh"><b data-i18n="shelf">Shelf 1</b><em>1/1</em></div><div class="mz z2" data-i18n="dropHere">Drop files here</div>
+          <div class="mrow r-in"><div class="t"></div><div><div class="n" data-i18n="sampleDraft">Q4 goals draft</div><div class="s">PDF · 2.4 MB · Oct 23, 15:06</div></div><u></u></div></div>
+        <div class="chip c-fly"><div class="t"></div><span data-i18n="sampleDraft">Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
       </div>
 
       <!-- 3 · take it back out -->
       <div class="scene" data-p="2">
-        <div class="mini left"><div class="mh"><b>Shelf 1</b><em>0/1</em></div>
-          <div class="mrow r-out"><div class="t"></div><div><div class="n">Q4 goals draft</div><div class="s">PDF · 2.4 MB · Oct 23, 15:06</div></div><u></u></div></div>
-        <div class="folder"><svg viewBox="0 0 24 24" class="g"></svg><span>Documents</span><div class="got"></div></div>
-        <div class="chip c-out"><div class="t"></div><span>Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
+        <div class="mini left"><div class="mh"><b data-i18n="shelf">Shelf 1</b><em>0/1</em></div>
+          <div class="mrow r-out"><div class="t"></div><div><div class="n" data-i18n="sampleDraft">Q4 goals draft</div><div class="s">PDF · 2.4 MB · Oct 23, 15:06</div></div><u></u></div></div>
+        <div class="folder"><svg viewBox="0 0 24 24" class="g"></svg><span data-i18n="documents">Documents</span><div class="got"></div></div>
+        <div class="chip c-out"><div class="t"></div><span data-i18n="sampleDraft">Q4 goals draft</span><svg class="cursor" viewBox="0 0 20 24"><path d="M3 2v16l4.2-3.8 3 6.8 2.8-1.3-3-6.6 5.6-.1z"/></svg></div>
         <div class="note">Hold <span class="keycap sm">⌥</span> to copy instead of move</div>
       </div>
 
       <!-- 4 · tabs, phone, shortcut -->
       <div class="scene" data-p="3">
-        <div class="mini left wide"><div class="mh"><div class="mt"><b>Work</b><span class="t2">Trip</span><span class="t3">Later</span><span class="plus">+</span></div><em>1/3</em></div>
-          <div class="mrow"><div class="t done"></div><div><div class="n d">Sign the offer</div><div class="s">PDF · 410 KB</div></div><u class="on"></u></div>
-          <div class="mrow"><div class="t"></div><div><div class="n">Accounts &amp; access</div><div class="s">Link · figma.com</div></div><u></u></div></div>
-        <div class="keys"><span class="keycap" data-k="0"></span><span class="keycap" data-k="1"></span><span class="keycap" data-k="2"></span><small>show or hide</small></div>
-        <div class="phone"><div class="screen"></div><i class="w1"></i><i class="w2"></i><i class="w3"></i><small>photos to shelf</small></div>
+        <div class="mini left wide"><div class="mh"><div class="mt"><b data-i18n="sampleWork">Work</b><span class="t2" data-i18n="sampleTrip">Trip</span><span class="t3" data-i18n="sampleLater">Later</span><span class="plus">+</span></div><em>1/3</em></div>
+          <div class="mrow"><div class="t done"></div><div><div class="n d" data-i18n="sampleSign">Sign the offer</div><div class="s">PDF · 410 KB</div></div><u class="on"></u></div>
+          <div class="mrow"><div class="t"></div><div><div class="n" data-i18n="sampleAccess">Accounts &amp; access</div><div class="s">Link · figma.com</div></div><u></u></div></div>
+        <div class="keys"><span class="keycap" data-k="0"></span><span class="keycap" data-k="1"></span><span class="keycap" data-k="2"></span><small data-i18n="showHide">show or hide</small></div>
+        <div class="phone"><div class="screen"></div><i class="w1"></i><i class="w2"></i><i class="w3"></i><small data-i18n="photosShelf">photos to shelf</small></div>
       </div>
     </div>
 
@@ -47,11 +48,13 @@
     <p id="desc"></p>
 
     <div class="bar">
-      <button class="btn" id="back">Back</button>
+      <button class="btn" id="back" data-i18n="back">Back</button>
       <div class="dots" id="dots"></div>
       <button class="btn primary" id="next">Next</button>
     </div>
   </div>
   <script src="icons.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
   <script src="guide.js"></script>
 </body></html>

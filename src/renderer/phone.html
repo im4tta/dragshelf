@@ -19,13 +19,15 @@
 <body>
   <div class="card">
     <div class="ico" id="ico"></div>
-    <h1>Photos from your phone</h1>
+    <h1 data-i18n="phoneTitle">Photos from your phone</h1>
     <div class="qr" id="qr"></div>
-    <div class="cap">Scan with your phone’s camera</div>
-    <div class="sub">Same Wi-Fi required. Photos arrive<br>on the shelf; nothing leaves your network.</div>
-    <div class="count">Received <b id="n">0</b></div>
-    <button class="btn" id="stop">Stop and close</button>
+    <div class="cap" data-i18n="scan">Scan with your phone’s camera</div>
+    <div class="sub" data-i18n="sameWifi">Same Wi-Fi required. Photos arrive on the shelf; nothing leaves your network.</div>
+    <div class="count"><span data-i18n="received">Received</span> <b id="n">0</b></div>
+    <button class="btn" id="stop" data-i18n="stopClose">Stop and close</button>
   </div>
   <script src="icons.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
   <script src="phone.js"></script>
 </body></html>

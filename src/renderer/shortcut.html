@@ -14,12 +14,18 @@
   .keys.bad .keycap { background: color-mix(in srgb, var(--danger) 30%, var(--bg)); color: var(--danger); }
   .hint { margin-top: auto; font-size: 12px; color: var(--dim); line-height: 1.5; min-height: 36px; }
   .hint.bad { color: var(--danger); }
+  :lang(km) .card { height: 192px; padding: 14px 18px; }
+  :lang(km) h1 { line-height: 1.8; margin-bottom: 10px; font-size: 15px; }
+  :lang(km) .hint { line-height: 1.85; font-size: 12px; }
+  :lang(km) .keycap { font-family: system-ui, sans-serif; }
 </style></head>
 <body>
   <div class="card">
-    <h1>Press the new shortcut</h1>
+    <h1 data-i18n="shortcutTitle">Press the new shortcut</h1>
     <div class="keys" id="keys"></div>
     <div class="hint" id="hint">Use <b>⌃</b> <b>⌥</b> <b>⇧</b> or <b>⌘</b> together with a key.<br>Esc cancels.</div>
   </div>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
   <script src="shortcut.js"></script>
 </body></html>

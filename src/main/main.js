@@ -10,6 +10,25 @@ const { describe } = require('./meta');
 const { Stash } = require('./stash');
 const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
+const I18N = require('../shared/i18n');
+function language() { return I18N.resolveLanguage(store && store.settings.language, app.getLocale()); }
+function tr(key, values) { return I18N.t(language(), key, values); }
+function localizedMeta(meta) {
+  const keys = { Missing: 'missing', Folder: 'folder', App: 'app', File: 'file', Link: 'link', Text: 'text' };
+  const details = { 'Moved or deleted': 'moved', 'Web link': 'webLink' };
+  let detail = details[meta.detail] ? tr(details[meta.detail]) : meta.detail;
+  if (language() === 'km' && /^\d+(\.\d+)? (B|KB|MB|GB|TB)$/.test(detail || '')) detail = detail.replace(/^\d+(\.\d+)?/, value => I18N.number('km', Number(value)));
+  return { ...meta, label: keys[meta.label] ? tr(keys[meta.label]) : meta.label, detail };
+}
+function windowQuery() { return { lang: language() }; }
+function updateLanguage() {
+  if (phone) phone.language = language;
+  if (guideWin) guideWin.setTitle(tr('welcome'));
+  if (phoneWin) phoneWin.setTitle(tr('phoneTitle'));
+  if (keyWin) keyWin.setTitle(tr('shortcutTitle'));
+  app.setAboutPanelOptions({ applicationName: 'Drag Shelf', applicationVersion: app.getVersion(), copyright: 'MIT License', credits: tr('tagline') });
+  pushState();
+}
 
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
@@ -63,12 +82,12 @@ let pushing = null;
 async function buildState() {
   const shelves = await Promise.all(store.shelves.map(async s => ({
     name: s.name,
-    items: await Promise.all(s.items.map(async it => ({ ...(await describe(it.p)), done: it.done, added: it.added })))
+    items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added })))
   })));
   const st = store.settings;
   return {
     viewport: { maxCardHeight: workAreaAt(shelfWin ? { x: shelfWin.getBounds().x + PAD, y: shelfWin.getBounds().y + PAD } : undefined).height - 2 * PAD - 12 },
-    shelves, active: store.active, platform: process.platform,
+    shelves, active: store.active, platform: process.platform, language: language(),
     settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut },
     phone: !!(phone && phone.running), hooks: hooksOn
   };
@@ -93,7 +112,7 @@ function createShelfWindow() {
   });
   shelfWin.setAlwaysOnTop(true, 'screen-saver');
   if (IS_MAC) shelfWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-  shelfWin.loadFile(R('shelf.html'), { query: TEST ? { test: '1' } : {} });
+  shelfWin.loadFile(R('shelf.html'), { query: { ...windowQuery(), ...(TEST ? { test: '1' } : {}) } });
   shelfWin.webContents.on('did-finish-load', pushState);
   shelfWin.on('closed', () => { shelfWin = null; });
 }
@@ -175,7 +194,7 @@ function openShortcutWindow() {
     frame: false, transparent: true, resizable: false, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, show: false, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true }
   });
-  keyWin.loadFile(R('shortcut.html'));
+  keyWin.loadFile(R('shortcut.html'), { query: windowQuery() });
   keyWin.once('ready-to-show', () => { keyWin.show(); keyWin.focus(); });
   keyWin.on('closed', () => { keyWin = null; if (!globalShortcut.isRegistered(store.settings.hotkey)) registerHotkey(store.settings.hotkey); });
 }
@@ -186,7 +205,7 @@ async function openPhone() {
   let info;
   try { info = await phone.start(); } catch (_) {
     const { dialog } = require('electron');
-    dialog.showMessageBox({ type: 'info', message: 'No local network found', detail: 'Connect to the same Wi-Fi as your phone and try again.', buttons: ['OK'] });
+    dialog.showMessageBox({ type: 'info', message: tr('noNetwork'), detail: tr('networkHelp'), buttons: [tr('ok')] });
     return;
   }
   if (!shelfWin.isVisible()) showShelfAt(screen.getCursorScreenPoint(), true); else pinned = true;
@@ -200,7 +219,7 @@ async function openPhone() {
   });
   phoneWin.setAlwaysOnTop(true, 'screen-saver');
   if (IS_MAC) phoneWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
-  phoneWin.loadFile(R('phone.html'));
+  phoneWin.loadFile(R('phone.html'), { query: windowQuery() });
   phoneWin.once('ready-to-show', () => phoneWin.showInactive());
   phoneWin.on('closed', () => { phoneWin = null; phone.stop(); pushState(); setTimeout(autoHideIfEmpty, 100); });
   pushState();
@@ -214,10 +233,10 @@ function openGuide() {
   guideWin = new BrowserWindow({
     useContentSize: true, autoHideMenuBar: true, icon: B('icon.png'),
     width: W, height: H, x: Math.round(wa.x + (wa.width - W) / 2), y: Math.round(wa.y + (wa.height - H - 32) / 2), show: false, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
-    title: 'Welcome to Drag Shelf', titleBarStyle: IS_MAC ? 'hiddenInset' : 'default', backgroundColor: '#242520', alwaysOnTop: true,
+    title: tr('welcome'), titleBarStyle: IS_MAC ? 'hiddenInset' : 'default', backgroundColor: '#242520', alwaysOnTop: true,
     webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true }
   });
-  guideWin.loadFile(R('guide.html'));
+  guideWin.loadFile(R('guide.html'), { query: windowQuery() });
   guideWin.once('ready-to-show', () => { guideWin.show(); guideWin.focus(); });
   guideWin.on('closed', () => { guideWin = null; store.setSetting('guideDone', true); });
 }
@@ -230,31 +249,32 @@ function trayImage() {
   img.setTemplateImage(true); return img;
 }
 function refreshTrayTitle() { /* reserved: could show item count next to the icon */ }
-function accentNames() { return [['yellow', 'Yellow'], ['blue', 'Blue'], ['purple', 'Purple'], ['pink', 'Pink'], ['red', 'Red'], ['orange', 'Orange'], ['green', 'Green'], ['teal', 'Teal']]; }
+function accentNames() { return ['yellow', 'blue', 'purple', 'pink', 'red', 'orange', 'green', 'teal'].map(key => [key, tr(key)]); }
 function buildTrayMenu() {
   const st = store.settings;
   const set = (k, v) => () => { store.setSetting(k, v); if (k === 'theme') applyTheme(); if (k === 'strict' && watch) watch.strict = v; pushState(); };
   return Menu.buildFromTemplate([
-    { label: shelfWin && shelfWin.isVisible() ? 'Hide shelf' : 'Show shelf', accelerator: undefined, sublabel: accelLabel(st.hotkey), click: () => toggleShelf(true) },
-    { label: 'Photos from phone…', type: 'checkbox', checked: !!(phoneWin && !phoneWin.isDestroyed()), click: openPhone },
+    { label: tr(shelfWin && shelfWin.isVisible() ? 'hideShelf' : 'showShelf'), accelerator: undefined, sublabel: accelLabel(st.hotkey), click: () => toggleShelf(true) },
+    { label: tr('phoneMenu'), type: 'checkbox', checked: !!(phoneWin && !phoneWin.isDestroyed()), click: openPhone },
     { type: 'separator' },
-    { label: 'Theme', submenu: [['auto', IS_MAC ? 'Match macOS' : 'Match system'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => ({ label: l, type: 'radio', checked: st.theme === v, click: set('theme', v) })) },
-    { label: 'Accent color', submenu: accentNames().map(([v, l]) => ({ label: l, type: 'radio', checked: st.accent === v, click: set('accent', v) })) },
-    { label: 'Change shortcut…', click: openShortcutWindow },
+    { label: tr('theme'), submenu: [['auto', IS_MAC ? 'macTheme' : 'systemTheme'], ['light', 'light'], ['dark', 'dark']].map(([v, key]) => ({ label: tr(key), type: 'radio', checked: st.theme === v, click: set('theme', v) })) },
+    { label: tr('accent'), submenu: accentNames().map(([v, l]) => ({ label: l, type: 'radio', checked: st.accent === v, click: set('accent', v) })) },
+    { label: tr('language'), submenu: [['auto', tr('systemLanguage')], ['en', 'English'], ['km', 'ភាសាខ្មែរ']].map(([value, label]) => ({ label, type: 'radio', checked: st.language === value, click: () => { store.setSetting('language', value); updateLanguage(); } })) },
+    { label: tr('shortcutMenu'), click: openShortcutWindow },
     { type: 'separator' },
-    { label: 'Clear all shelves', click: () => { store.clearAll(); pushState(); if (!pinned) hideShelf(); } },
-    { label: 'Remove items after dragging them out', type: 'checkbox', checked: st.moveOnDragOut, click: set('moveOnDragOut', !st.moveOnDragOut) },
-    { label: 'Strict drag detection', type: 'checkbox', checked: st.strict, click: set('strict', !st.strict) },
-    { label: IS_WIN ? 'Start with Windows' : 'Start at login', type: 'checkbox', checked: app.getLoginItemSettings(loginOptions()).openAtLogin, click: m => app.setLoginItemSettings({ ...loginOptions(), openAtLogin: m.checked }) },
-    ...(lastApp ? [{ label: `Never show over ${lastApp}`, click: () => { ensureExcluded(); fs.appendFileSync(excludedFile(), lastApp + '\n'); } }] : []),
-    { label: 'Edit excluded apps…', click: () => { ensureExcluded(); shell.openPath(excludedFile()); } },
+    { label: tr('clearShelves'), click: () => { store.clearAll(); pushState(); if (!pinned) hideShelf(); } },
+    { label: tr('removeAfter'), type: 'checkbox', checked: st.moveOnDragOut, click: set('moveOnDragOut', !st.moveOnDragOut) },
+    { label: tr('strictDrag'), type: 'checkbox', checked: st.strict, click: set('strict', !st.strict) },
+    { label: tr(IS_WIN ? 'startWindows' : 'startLogin'), type: 'checkbox', checked: app.getLoginItemSettings(loginOptions()).openAtLogin, click: m => app.setLoginItemSettings({ ...loginOptions(), openAtLogin: m.checked }) },
+    ...(lastApp ? [{ label: tr('excludeApp', { name: lastApp }), click: () => { ensureExcluded(); fs.appendFileSync(excludedFile(), lastApp + '\n'); } }] : []),
+    { label: tr('editExcluded'), click: () => { ensureExcluded(); shell.openPath(excludedFile()); } },
     { type: 'separator' },
-    ...(IS_MAC ? [{ label: hooksOn ? 'Drag detection: on' : 'Enable drag detection…', enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
-    { label: 'Show guide', click: openGuide },
-    { label: 'Privacy policy', click: () => shell.openExternal('https://github.com/im4tta/dragshelf/blob/main/PRIVACY.md') },
-    { label: 'Help and support', click: () => shell.openExternal('https://github.com/im4tta/dragshelf/issues') },
-    { label: 'About Drag Shelf', click: () => app.showAboutPanel() },
-    { label: 'Quit Drag Shelf', accelerator: IS_MAC ? 'Command+Q' : undefined, click: () => app.quit() }
+    ...(IS_MAC ? [{ label: tr(hooksOn ? 'detectionOn' : 'enableDetection'), enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
+    { label: tr('showGuide'), click: openGuide },
+    { label: tr('privacy'), click: () => shell.openExternal(`https://github.com/im4tta/dragshelf/blob/main/PRIVACY${language() === 'km' ? '.km' : ''}.md`) },
+    { label: tr('support'), click: () => shell.openExternal('https://github.com/im4tta/dragshelf/issues') },
+    { label: tr('about'), click: () => app.showAboutPanel() },
+    { label: tr('quit'), accelerator: IS_MAC ? 'Command+Q' : undefined, click: () => app.quit() }
   ]);
 }
 function loginOptions() { return IS_WIN ? { path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, args: [] } : {}; }
@@ -270,20 +290,20 @@ function createTray() {
 function openItemMenu(index) {
   const it = store.cur.items[index]; if (!it) return;
   Menu.buildFromTemplate([
-    { label: 'Open', click: () => shell.openPath(it.p) },
-    { label: IS_MAC ? 'Show in Finder' : 'Show in folder', click: () => shell.showItemInFolder(it.p) },
-    { label: 'Copy path', click: () => clipboard.writeText(it.p) },
+    { label: tr('open'), click: () => shell.openPath(it.p) },
+    { label: tr(IS_MAC ? 'revealMac' : 'reveal'), click: () => shell.showItemInFolder(it.p) },
+    { label: tr('copyPath'), click: () => clipboard.writeText(it.p) },
     { type: 'separator' },
-    { label: it.done ? 'Mark as not done' : 'Mark as done', click: () => { store.toggleDone(store.active, index); pushState(); } },
-    { label: 'Remove from shelf', click: () => { store.removePaths(store.active, [it.p]); pushState(); setTimeout(autoHideIfEmpty, 50); } }
+    { label: tr(it.done ? 'markNotDone' : 'markDone'), click: () => { store.toggleDone(store.active, index); pushState(); } },
+    { label: tr('remove'), click: () => { store.removePaths(store.active, [it.p]); pushState(); setTimeout(autoHideIfEmpty, 50); } }
   ]).popup({ window: shelfWin });
 }
 function openTabMenu(index) {
   store.setActive(index); pushState();
   Menu.buildFromTemplate([
-    { label: 'Rename', click: () => shelfWin.webContents.send('rename', index) },
-    { label: 'Clear shelf', click: () => { store.clearShelf(index); pushState(); } },
-    { label: 'Delete shelf', enabled: store.shelves.length > 1, click: () => { store.deleteShelf(index); pushState(); } }
+    { label: tr('rename'), click: () => shelfWin.webContents.send('rename', index) },
+    { label: tr('clearShelf'), click: () => { store.clearShelf(index); pushState(); } },
+    { label: tr('deleteShelf'), enabled: store.shelves.length > 1, click: () => { store.deleteShelf(index); pushState(); } }
   ]).popup({ window: shelfWin });
 }
 
@@ -297,13 +317,13 @@ function wireIpc() {
       case 'clearShelf': store.clearShelf(p.shelf ?? store.active); break;
       case 'clearDone': store.clearDone(p.shelf ?? store.active); break;
       case 'clearAll': store.clearAll(); break;
-      case 'newShelf': { const i = store.newShelf(); if (p.activate !== false) store.setActive(i); pushState(); return i; }
+      case 'newShelf': { const i = store.newShelf(n => tr('shelfName', { n: I18N.number(language(), n) })); if (p.activate !== false) store.setActive(i); pushState(); return i; }
       case 'setActive': store.setActive(p.index); break;
       case 'rename': store.renameShelf(p.index, p.name); break;
       case 'move': store.moveItems(p.from, p.paths || [], p.to, p.at); break;
       case 'open': shell.openPath(p.path); break;
       case 'phone': openPhone(); break;
-      case 'setting': store.setSetting(p.key, p.value); if (p.key === 'theme') applyTheme(); break;
+      case 'setting': store.setSetting(p.key, p.value); if (p.key === 'theme') applyTheme(); if (p.key === 'language') updateLanguage(); break;
       default: break;
     }
     pushState(); setTimeout(autoHideIfEmpty, 400);
@@ -358,12 +378,12 @@ app.whenReady().then(() => {
     try { require('./windows-migration').importWindowsShelves(path.join(process.env.LOCALAPPDATA, 'DragShelf'), app.getPath('userData')); }
     catch (error) { console.warn('Legacy shelves could not be imported:', error.message); }
   }
-  store = new Store(app.getPath('userData'));
+  store = new Store(app.getPath('userData'), tr('shelfName', { n: 1 }));
   stash = new Stash(path.join(app.getPath('userData'), 'stash'));
-  phone = new PhoneServer(stash.dir);
+  phone = new PhoneServer(stash.dir, language);
   dragIcon = nativeImage.createFromPath(B('dragicon.png'));
   ensureExcluded(); applyTheme();
-  app.setAboutPanelOptions({ applicationName: 'Drag Shelf', applicationVersion: app.getVersion(), copyright: 'MIT License', credits: 'A temporary shelf for files, links, text and images.' });
+  updateLanguage();
 
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
   wireIpc();
@@ -374,6 +394,7 @@ app.whenReady().then(() => {
 
   if (TEST) {   // automated screenshots drive the app through these hooks
     global.__test = {
+      menuLabels: () => { const labels = menu => menu.items.flatMap(item => [item.label, ...(item.submenu ? labels(item.submenu) : [])]).filter(Boolean); return labels(buildTrayMenu()); },
       setWorkArea: area => { testWorkArea = area; pushState(); },
       windowsReady: async () => {
         const snapshot = await require('./windows-context').snapshot();

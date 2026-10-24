@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+- Added English/Khmer language switching throughout the shared Windows/macOS interface, native menus, onboarding, dialogs, shortcut recorder and phone-transfer pages.
+- Bundled Noto Sans Khmer for offline rendering; localized dates, numbers, metadata labels and upload errors.
+- Preserved Khmer text, filenames and character clusters when naming shelves and creating files.
+- Long shelf names now use a wrapping tab row instead of ellipses, with work-area-aware list sizing.
+- Added Khmer integration and Unicode persistence tests for source and packaged Windows builds.
+
 ## 1.1.0
 - Windows now uses the same Electron interface as macOS, replacing the older native UI in GitHub downloads.
 - Added Windows installer and portable builds, platform shortcuts and link files, DPI-aware drag placement, native foreground-app checks and one-time import of old Windows shelves.

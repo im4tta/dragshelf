@@ -20,19 +20,18 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const cur = () => S.shelves[S.active];
 
 function when(ts) {
-  const d = new Date(ts);
-  const mon = d.toLocaleString('en-US', { month: 'short' });
-  return `${mon} ${d.getDate()}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return I18N.date(Locale.language, ts);
 }
 
 function render() {
   if (!S) return;
+  Locale.set(S.language);
   const scheme = S.settings.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : S.settings.theme;
   root.dataset.scheme = scheme; root.dataset.accent = S.settings.accent;
   if (S.viewport) root.style.setProperty('--shelf-max-height', `${S.viewport.maxCardHeight}px`);
 
   const sh = cur(), items = sh.items, done = items.filter(i => i.done).length;
-  $('#counter').textContent = `${done}/${items.length}`;
+  $('#counter').textContent = `${Locale.number(done)}/${Locale.number(items.length)}`;
   $('#phoneBtn').innerHTML = window.glyph('phone'); $('#phoneBtn').classList.toggle('live', S.phone);
   $('#closeBtn').innerHTML = window.glyph('close');
 
@@ -44,16 +43,19 @@ function render() {
       tabs.appendChild(b);
     });
     const on = tabs.querySelector('.on'); if (on) on.scrollIntoView({ inline: 'nearest' });
+    const top = $('#top'); top.classList.remove('long-tabs');
+    top.classList.toggle('long-tabs', [...tabs.children].some(tab => tab.scrollWidth > tab.clientWidth + 1));
+    if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
   const list = $('#list'); list.innerHTML = '';
   items.forEach((it, i) => {
     const li = document.createElement('li');
     li.className = 'row' + (it.done ? ' done' : '') + (it.missing ? ' missing' : ''); li.dataset.i = i; li.draggable = true; li.title = it.name;
-    const sub = it.missing ? 'Missing · moved or deleted' : [it.label, it.detail, when(it.added)].filter(Boolean).join(' · ');
+    const sub = it.missing ? Locale.t('missingDetail') : [it.label, it.detail, when(it.added)].filter(Boolean).join(' · ');
     li.innerHTML = `<div class="tile">${it.thumb ? `<img src="${it.thumb}" alt="">` : window.glyph(it.kind)}</div>
       <div class="meta"><div class="name">${esc(it.stem)}</div><div class="sub">${esc(sub)}</div></div>
-      <button class="check${justDone === it.path ? ' pop' : ''}" title="${it.done ? 'Mark as not done' : 'Mark as done'}">${window.glyph('check')}</button>`;
+      <button class="check${justDone === it.path ? ' pop' : ''}" title="${Locale.t(it.done ? 'markNotDone' : 'markDone')}" aria-label="${Locale.t(it.done ? 'markNotDone' : 'markDone')}">${window.glyph('check')}</button>`;
     list.appendChild(li);
   });
   justDone = null;
@@ -63,10 +65,11 @@ function render() {
   $('#empty').style.display = n ? 'none' : 'block';
   $('#foot').style.display = n >= 2 ? 'flex' : 'none';
   $('#clearDone').style.display = done > 0 ? 'inline-block' : 'none';
-  $('#dragAll').innerHTML = `${window.glyph('stack')}Drag all · ${n}`;
+  $('#dragAll').innerHTML = `${window.glyph('stack')}${Locale.t('dragAll', { n: Locale.number(n) })}`;
   $('#empty .zone-ico').innerHTML = window.glyph('drop');
   $('#empty .zone-s').textContent = S.hooks === false
-    ? `Press ${S.settings.hotkeyLabel} or click the ${S.platform === 'darwin' ? 'menu bar' : 'tray'} icon` : 'Or drag something and shake the mouse';
+    ? Locale.t(S.platform === 'darwin' ? 'noHookMac' : 'noHook', { hotkey: S.settings.hotkeyLabel }) : Locale.t('emptyHint');
+  root.style.setProperty('--shelf-chrome-height', `${$('#top').offsetHeight + $('#foot').offsetHeight + 2}px`);
   requestAnimationFrame(reportSize);
 }
 
@@ -105,10 +108,10 @@ $('#list').addEventListener('contextmenu', e => { const row = e.target.closest('
 function beginRename(i) {
   const el = document.querySelector(`[data-tab="${i}"]`); if (!el || renaming) return;
   renaming = true; window.shelf.send('focusable', true);
-  const input = document.createElement('input'); input.className = 'tab-edit'; input.value = S.shelves[i].name; input.maxLength = 24;
+  const input = document.createElement('input'); input.className = 'tab-edit'; input.value = S.shelves[i].name; input.maxLength = 2048; input.setAttribute('aria-label', Locale.t('rename'));
   el.replaceWith(input); setTimeout(() => { input.focus(); input.select(); }, 60);
   const end = ok => { if (!renaming) return; renaming = false; window.shelf.send('focusable', false); if (ok && input.value.trim()) act('rename', { index: i, name: input.value }); else render(); };
-  input.onkeydown = e => { if (e.key === 'Enter') end(true); else if (e.key === 'Escape') end(false); };
+  input.onkeydown = e => { if (e.isComposing) return; if (e.key === 'Enter') end(true); else if (e.key === 'Escape') end(false); };
   input.onblur = () => end(true);
 }
 window.shelf.on('rename', beginRename);

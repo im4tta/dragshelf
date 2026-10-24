@@ -8,26 +8,35 @@ const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const QRCode = require('qrcode');
 const { sanitize, uniqueIn } = require('./stash');
+const I18N = require('../shared/i18n');
 
 const MAX_BYTES = 400 * 1024 * 1024;
 
-const PAGE = `<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Drag Shelf</title>
+function phonePage(language, base) {
+const t = key => I18N.t(language, key);
+return `<!doctype html><html lang="${language}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Drag Shelf</title>
 <style>
+@font-face{font-family:Khmer;src:url('${base}/font.ttf') format('truetype');font-weight:100 900;font-display:swap}
 :root{color-scheme:dark}
 body{font-family:-apple-system,system-ui,sans-serif;margin:0;padding:28px 20px;background:#242520;color:#f4f5ee;text-align:center}
+:lang(km) body{font-family:Khmer,"Leelawadee UI",system-ui,sans-serif;line-height:1.9}
 h1{font-size:22px;margin:8px 0 6px}p{color:#8d8f83;margin:0 0 22px}
 label{display:block;margin:0 auto;padding:18px;border-radius:16px;background:#f5c63a;color:#242520;font-size:18px;font-weight:600;max-width:340px}
 #log{text-align:left;max-width:340px;margin:18px auto;font-size:15px;line-height:1.8;word-break:break-all}
 .ok{color:#f5c63a}.bad{color:#ff6b6b}
+select{font:inherit;background:#33342f;color:#f4f5ee;border:1px solid #62645a;border-radius:8px;padding:4px 10px;margin-bottom:16px}
 </style></head><body>
-<h1>Send photos to your Mac</h1><p>They go straight to your computer over this Wi-Fi.</p>
-<label>Choose photos or videos<input id=f type=file accept="image/*,video/*" multiple hidden></label><div id=log></div>
+<select aria-label="Language / ភាសា" onchange="location.search='?lang='+this.value"><option value=en ${language === 'en' ? 'selected' : ''}>English</option><option value=km ${language === 'km' ? 'selected' : ''}>ភាសាខ្មែរ</option></select>
+<h1>${t('phoneSend')}</h1><p>${t('phoneIntro')}</p>
+<label>${t('phoneChoose')}<input id=f type=file accept="image/*,video/*" multiple hidden></label><div id=log aria-live=polite></div>
 <script>
 var f=document.getElementById('f'),log=document.getElementById('log');
-f.onchange=async function(){for(const x of f.files){const d=document.createElement('div');d.textContent='Sending '+x.name+' …';log.appendChild(d);
-try{const r=await fetch(location.pathname.replace(/\\/$/,'')+'/up?name='+encodeURIComponent(x.name),{method:'POST',body:x});
-d.textContent=(r.ok?'✓ Sent ':'✕ Failed ')+x.name;d.className=r.ok?'ok':'bad'}catch(e){d.textContent='✕ Failed '+x.name;d.className='bad'}}f.value=''};
+var words=${JSON.stringify({ sending: t('sending'), sent: t('sent'), failed: t('failed') })};
+f.onchange=async function(){for(const x of f.files){const d=document.createElement('div');d.textContent=words.sending+' '+x.name+' …';log.appendChild(d);
+try{const r=await fetch(location.pathname.replace(/\\/$/,'')+'/up?lang=${language}&name='+encodeURIComponent(x.name),{method:'POST',body:x});
+const reason=r.ok?'':await r.text();d.textContent=(r.ok?'✓ '+words.sent:'✕ '+words.failed)+' '+x.name+(reason?' — '+reason:'');d.className=r.ok?'ok':'bad'}catch(e){d.textContent='✕ '+words.failed+' '+x.name;d.className='bad'}}f.value=''};
 </script></body></html>`;
+}
 
 function isPrivate(ip) {
   ip = String(ip || '').replace(/^::ffff:/, '');
@@ -48,7 +57,7 @@ function lanIp() {
 }
 
 class PhoneServer extends EventEmitter {
-  constructor(stashDir) { super(); this.dir = path.join(stashDir, 'Phone'); this.server = null; this.count = 0; this.url = ''; }
+  constructor(stashDir, language = () => 'en') { super(); this.language = language; this.dir = path.join(stashDir, 'Phone'); this.server = null; this.count = 0; this.url = ''; }
   get running() { return !!this.server; }
   async start() {
     if (this.server) return this.info();
@@ -78,22 +87,30 @@ class PhoneServer extends EventEmitter {
     const reply = (code, body, type = 'text/plain') => { res.writeHead(code, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'close' }); res.end(body); };
     if (!isPrivate(req.socket.remoteAddress)) return req.socket.destroy();
     const u = new URL(req.url, 'http://x'); const base = '/' + token;
-    if (req.method === 'GET' && (u.pathname === base || u.pathname === base + '/')) return reply(200, PAGE, 'text/html');
+    const language = I18N.resolveLanguage(u.searchParams.get('lang') || this.language());
+    const t = key => I18N.t(language, key);
+    if (req.method === 'GET' && (u.pathname === base || u.pathname === base + '/')) return reply(200, phonePage(language, base), 'text/html');
+    if (req.method === 'GET' && u.pathname === base + '/font.ttf') {
+      const font = path.join(__dirname, '../renderer/fonts/NotoSansKhmer.ttf');
+      if (!fs.existsSync(font)) return reply(404, t('notFound'));
+      res.writeHead(200, { 'Content-Type': 'font/ttf', 'Cache-Control': 'private, max-age=86400', Connection: 'close' });
+      return fs.createReadStream(font).pipe(res);
+    }
     if (req.method === 'POST' && u.pathname === base + '/up') {
       const len = Number(req.headers['content-length'] || 0);
-      if (!len || len > MAX_BYTES) return reply(413, 'bad size');
+      if (!len || len > MAX_BYTES) return reply(413, t('badSize'));
       const dest = uniqueIn(this.dir, sanitize(u.searchParams.get('name') || '') || 'photo.jpg');
       const ws = fs.createWriteStream(dest, { flags: 'wx' }); let got = 0;
       req.on('data', c => { got += c.length; });
       req.on('aborted', () => { ws.destroy(); fs.unlink(dest, () => {}); });
-      ws.on('error', () => reply(500, 'disk'));
+      ws.on('error', () => reply(500, t('diskError')));
       ws.on('finish', () => {
-        if (got !== len) { fs.unlink(dest, () => {}); return reply(400, 'incomplete'); }
+        if (got !== len) { fs.unlink(dest, () => {}); return reply(400, t('incomplete')); }
         this.count++; reply(200, 'ok'); this.emit('file', dest, this.count);
       });
       return req.pipe(ws);
     }
-    reply(404, 'not found');
+    reply(404, t('notFound'));
   }
 }
 module.exports = { PhoneServer, isPrivate };

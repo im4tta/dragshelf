@@ -6,7 +6,7 @@ const path = require('path');
 
 function sanitize(s) {
   s = String(s || '').replace(/[\\/:*?"<>|\r\n\t\0]/g, '_').replace(/^\.+/, '_').replace(/[ .]+$/, '');
-  return s.slice(0, 120);
+  return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].slice(0, 96).map(part => part.segment).join('');
 }
 function uniqueIn(dir, name) {
   name = sanitize(name) || 'item';

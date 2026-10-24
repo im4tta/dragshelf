@@ -11,12 +11,12 @@
   <div id="frame">
     <main id="card">
       <header id="top">
-        <div id="grip" title="Drag to move"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div id="grip" title="Drag to move" data-i18n-title="dragMove"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <nav id="tabs"></nav>
-        <button id="addTab" title="New shelf">+</button>
-        <span id="counter" title="Done / total on this shelf">0/0</span>
-        <button id="phoneBtn" class="icon" title="Photos from phone"></button>
-        <button id="closeBtn" class="icon" title="Hide shelf"></button>
+        <button id="addTab" title="New shelf" data-i18n-title="newShelf">+</button>
+        <span id="counter" title="Done / total on this shelf" data-i18n-title="doneTotal">0/0</span>
+        <button id="phoneBtn" class="icon" title="Photos from phone" data-i18n-title="phoneMenu"></button>
+        <button id="closeBtn" class="icon" title="Hide shelf" data-i18n-title="hideShelf"></button>
       </header>
 
       <div id="listWrap">
@@ -27,23 +27,25 @@
       <section id="empty">
         <div class="zone">
           <div class="zone-ico"></div>
-          <div class="zone-t">Drop files, links, text or images here</div>
+          <div class="zone-t" data-i18n="emptyTitle">Drop files, links, text or images here</div>
           <div class="zone-s">Or drag something and shake the mouse</div>
         </div>
       </section>
 
       <footer id="foot">
-        <div id="dragAll" draggable="true" title="Drag everything on this shelf at once"></div>
+        <div id="dragAll" draggable="true" title="Drag everything on this shelf at once" data-i18n-title="dragAllHint"></div>
         <span class="sp"></span>
-        <button id="clearDone" class="link">Clear done</button>
-        <button id="clearAll" class="link danger">Clear all</button>
+        <button id="clearDone" class="link" data-i18n="clearDone">Clear done</button>
+        <button id="clearAll" class="link danger" data-i18n="clearAll">Clear all</button>
       </footer>
 
-      <div id="dropHint">Drop to add</div>
+      <div id="dropHint" data-i18n="dropAdd">Drop to add</div>
       <div id="confetti"></div>
     </main>
   </div>
   <script src="icons.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
   <script src="shelf.js"></script>
 </body>
 </html>

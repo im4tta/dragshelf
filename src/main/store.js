@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_SETTINGS = {
+  language: 'auto',
   theme: 'auto',            // auto | light | dark
   accent: 'yellow',
   hotkey: process.platform === 'win32' ? 'Control+Shift+F' : 'Alt+Shift+S',
@@ -14,11 +15,12 @@ const DEFAULT_SETTINGS = {
 };
 
 class Store {
-  constructor(dir) {
+  constructor(dir, defaultShelfName = 'Shelf 1') {
     this.dir = dir;
     this.file = path.join(dir, 'shelves.json');
     this.settingsFile = path.join(dir, 'settings.json');
     this.shelves = [];
+    this.defaultShelfName = defaultShelfName;
     this.active = 0;
     this.settings = { ...DEFAULT_SETTINGS };
     this._t = null;
@@ -35,7 +37,7 @@ class Store {
       }));
       this.active = Math.max(0, Math.min(j.active | 0, this.shelves.length - 1));
     } catch (_) { /* first run */ }
-    if (!this.shelves.length) this.shelves = [{ name: 'Shelf 1', items: [] }];
+    if (!this.shelves.length) this.shelves = [{ name: this.defaultShelfName, items: [] }];
     try { Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, 'utf8'))); } catch (_) { /* defaults */ }
   }
 
@@ -59,7 +61,7 @@ class Store {
   get cur() { return this.shelves[this.active]; }
   total() { return this.shelves.reduce((n, s) => n + s.items.length, 0); }
 
-  setSetting(k, v) { this.settings[k] = v; this.save(); }
+  setSetting(k, v) { if (k === 'language' && !['auto', 'en', 'km'].includes(v)) return; this.settings[k] = v; this.save(); }
 
   addPaths(shelf, paths) {
     const s = this.shelves[shelf]; if (!s) return 0;
@@ -83,10 +85,10 @@ class Store {
   clearShelf(shelf) { if (this.shelves[shelf]) { this.shelves[shelf].items = []; this.save(); } }
   clearDone(shelf) { const s = this.shelves[shelf]; if (s) { s.items = s.items.filter(i => !i.done); this.save(); } }
   clearAll() { this.shelves.forEach(s => (s.items = [])); this.save(); }
-  newShelf() {
+  newShelf(nameFor = n => 'Shelf ' + n) {
     let n = this.shelves.length + 1; const names = new Set(this.shelves.map(s => s.name));
-    while (names.has('Shelf ' + n)) n++;
-    this.shelves.push({ name: 'Shelf ' + n, items: [] }); this.save();
+    while (names.has(nameFor(n))) n++;
+    this.shelves.push({ name: nameFor(n), items: [] }); this.save();
     return this.shelves.length - 1;
   }
   deleteShelf(i) {
@@ -95,7 +97,7 @@ class Store {
     this.active = Math.max(0, Math.min(this.active, this.shelves.length - 1)); this.save();
   }
   renameShelf(i, name) {
-    name = String(name || '').trim().slice(0, 24);
+    name = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(String(name || '').trim())].slice(0, 256).map(part => part.segment).join('');
     if (name && this.shelves[i]) { this.shelves[i].name = name; this.save(); }
   }
   setActive(i) { if (this.shelves[i]) { this.active = i; this.save(); } }
