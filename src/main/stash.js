@@ -33,6 +33,11 @@ class Stash {
     fs.writeFileSync(p, text, 'utf8'); return p;
   }
   saveUrl(url) {
+    if (process.platform === 'win32') {
+      const p = uniqueIn(this.dir, `${hostOf(url)}.url`);
+      fs.writeFileSync(p, `[InternetShortcut]\r\nURL=${String(url).replace(/[\r\n]/g, '')}\r\n`, 'utf8');
+      return p;
+    }
     const p = uniqueIn(this.dir, `${hostOf(url)}.webloc`);
     fs.writeFileSync(p, `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n\t<key>URL</key>\n\t<string>${esc(url)}</string>\n</dict>\n</plist>\n`);
     return p;

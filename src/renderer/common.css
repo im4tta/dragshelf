@@ -1,7 +1,7 @@
 /* Design tokens – adapted from the "Onboarding tasks" reference: warm near-black card, cream tiles for open
    items, dimmed + struck-through tiles for done items, one bright accent for the check circles. */
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", system-ui, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Inter", "Helvetica Neue", system-ui, sans-serif;
   --accent: #f5c63a; --accent-fg: #242520;
 
   --bg: #242520;            --bg-2: #2c2d27;

@@ -8,9 +8,9 @@ files:
   - src/**/*
   - build/trayTemplate*.png
   - build/dragicon.png
+  - build/icon.png
   - package.json
-  # only ship the macOS native hook binaries
-  - "!**/node_modules/uiohook-napi/prebuilds/{linux,win32}*/**"
+  - "!**/node_modules/uiohook-napi/prebuilds/linux*/**"
   - "!**/node_modules/uiohook-napi/{libuiohook,src}/**"
   - "!**/node_modules/**/{test,tests,docs,*.md,*.map}"
 npmRebuild: false      # uiohook-napi ships N-API prebuilds for darwin-x64 and darwin-arm64
@@ -31,6 +31,24 @@ mac:
   gatekeeperAssess: false
   target: [dmg, zip]
 artifactName: DragShelf-${version}-mac-${arch}.${ext}
+win:
+  target: [nsis, portable]
+  icon: build/icon.png
+  executableName: DragShelf
+  extraResources:
+    - from: build/win-helper.exe
+      to: win-helper.exe
+nsis:
+  artifactName: DragShelf-${version}-windows-${arch}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Drag Shelf
+portable:
+  artifactName: DragShelf-${version}-windows-${arch}-portable.${ext}
+  requestExecutionLevel: user
 dmg:
   title: Drag Shelf ${version}
   icon: build/icon.icns

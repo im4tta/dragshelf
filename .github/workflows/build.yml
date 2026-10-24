@@ -25,6 +25,7 @@ jobs:
         run: python3 -m pip install Pillow
       - name: End-to-end self test (real Electron app under Xvfb)
         run: xvfb-run -a npm test
+      - run: npm run test:migration
 
   mac:
     needs: test
@@ -71,19 +72,36 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      - name: Build portable Windows executable
+      - run: npm ci
+      - name: Build Windows desktop context helper
         shell: cmd
         run: |
-          mkdir dist
-          cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS windows\DragShelf-source.cpp /Fe:dist\DragShelf-1.0.0-windows-x64.exe /Fo:dist\DragShelf.obj /link /SUBSYSTEM:WINDOWS user32.lib gdi32.lib shell32.lib shlwapi.lib ole32.lib oleaut32.lib uuid.lib advapi32.lib comctl32.lib msimg32.lib ws2_32.lib
+          cl /nologo /std:c++17 /EHsc /O2 /MT /utf-8 /DNOMINMAX windows\desktop-helper.cpp /Fe:build\win-helper.exe /Fo:build\win-helper.obj /link user32.lib shell32.lib
+      - name: Windows end-to-end tests
+        run: npm test
+      - name: Build shared UI installer and portable executable
+        run: npx electron-builder --win --x64 --publish never
+      - name: Test packaged Windows application
+        shell: powershell
+        run: |
+          $env:DRAGSHELF_TEST_EXE = Join-Path $PWD 'dist/win-unpacked/DragShelf.exe'
+          npm test
+      - name: Windows UI screenshots
+        run: npm run screenshots
       - uses: actions/upload-artifact@v4
         with:
           name: DragShelf-Windows
           path: dist/*.exe
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-UI-preview
+          path: docs/screenshots-windows/*.png
 
   release:
     needs: [mac, windows]

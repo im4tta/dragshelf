@@ -6,7 +6,7 @@ const path = require('path');
 const DEFAULT_SETTINGS = {
   theme: 'auto',            // auto | light | dark
   accent: 'yellow',
-  hotkey: 'Alt+Shift+S',
+  hotkey: process.platform === 'win32' ? 'Control+Shift+F' : 'Alt+Shift+S',
   strict: true,             // only pop up when a real file drag is in progress
   moveOnDragOut: true,      // items leave the shelf once dropped somewhere else (hold ⌥ to copy)
   guideDone: false,

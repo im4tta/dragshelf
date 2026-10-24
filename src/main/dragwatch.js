@@ -23,6 +23,7 @@ JSON.stringify({
 
 // Reads { cc: dragPasteboardChangeCount, name, id: frontmostApp } – null when unavailable (non-mac, error).
 function systemSnapshot() {
+  if (process.platform === 'win32') return require('./windows-context').snapshot();
   if (process.platform !== 'darwin') return Promise.resolve(null);
   return new Promise(resolve => {
     execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', JXA], { timeout: 2500 }, (err, out, errOut) => {
@@ -64,17 +65,20 @@ class DragWatch extends EventEmitter {
   stop() { try { if (this.started && this.hook) this.hook.stop(); } catch (_) { /* ignore */ } this.started = false; }
 
   _down(e) {
+    if (e.button !== 1) return;
     this.tracking = true; this.fired = false;
     this.p0 = this.last = { x: e.x, y: e.y }; this.dir = 0; this.rev = 0;
-    this.baseline = this.strict ? systemSnapshot() : null;
+    this.baseline = this.strict && process.platform === 'darwin' ? systemSnapshot() : null;
   }
   _up(e) {
-    if (this.tracking) { this.tracking = false; this.emit('mouseup', { x: e.x, y: e.y, altKey: e.altKey }); }
+    if (e.button !== 1) return;
+    if (this.tracking) { this.tracking = false; this.emit('mouseup', { ...this._point(e), altKey: process.platform === 'win32' ? e.ctrlKey : e.altKey }); }
   }
+  _point(e) { const pt = { x: e.x, y: e.y }; return process.platform === 'win32' ? screen.screenToDipPoint(pt) : pt; }
   _fire(pt) {
     if (this.fired) return; this.fired = true;
     const baseline = this.baseline;
-    this.emit('trigger', pt, baseline);
+    this.emit('trigger', this._point(pt), baseline);
   }
   _move(e) {
     if (!this.tracking || this.fired) return;
@@ -84,11 +88,11 @@ class DragWatch extends EventEmitter {
     if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
 
     // 1. pushed against an outer screen edge (not a shared edge between two monitors)
-    const d = screen.getDisplayNearestPoint(pt), b = d.bounds; let probe = null;
-    if (pt.x <= b.x + 1) probe = { x: pt.x - 4, y: pt.y };
-    else if (pt.x >= b.x + b.width - 2) probe = { x: pt.x + 4, y: pt.y };
-    else if (pt.y <= b.y + 1) probe = { x: pt.x, y: pt.y - 4 };
-    else if (pt.y >= b.y + b.height - 2) probe = { x: pt.x, y: pt.y + 4 };
+    const dip = this._point(pt), d = screen.getDisplayNearestPoint(dip), b = d.bounds; let probe = null;
+    if (dip.x <= b.x + 1) probe = { x: dip.x - 4, y: dip.y };
+    else if (dip.x >= b.x + b.width - 2) probe = { x: dip.x + 4, y: dip.y };
+    else if (dip.y <= b.y + 1) probe = { x: dip.x, y: dip.y - 4 };
+    else if (dip.y >= b.y + b.height - 2) probe = { x: dip.x, y: dip.y + 4 };
     if (probe && !screen.getAllDisplays().some(o => probe.x >= o.bounds.x && probe.x < o.bounds.x + o.bounds.width && probe.y >= o.bounds.y && probe.y < o.bounds.y + o.bounds.height)) {
       return this._fire(pt);
     }

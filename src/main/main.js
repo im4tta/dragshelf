@@ -12,12 +12,14 @@ const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
 
 const IS_MAC = process.platform === 'darwin';
+const IS_WIN = process.platform === 'win32';
 const TEST = !!process.env.DRAGSHELF_TEST;
 const CARD_W = 320, PAD = 18, WIN_W = CARD_W + PAD * 2;
 const R = p => path.join(__dirname, '..', 'renderer', p);
 const B = p => path.join(__dirname, '..', '..', 'build', p);
 
 app.setName('Drag Shelf');
+if (IS_WIN) app.setAppUserModelId('com.santhon.dragshelf');
 if (process.env.DRAGSHELF_USER_DATA) app.setPath('userData', process.env.DRAGSHELF_USER_DATA);
 if (!TEST && !app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -43,7 +45,7 @@ function accelLabel(a) {
 function excludedFile() { return path.join(app.getPath('userData'), 'excluded.txt'); }
 function ensureExcluded() {
   if (!fs.existsSync(excludedFile())) {
-    fs.writeFileSync(excludedFile(), '# Apps where Drag Shelf must never pop up. One per line: the app name or bundle id.\n# Example:\n# Keynote\n# com.apple.dt.Xcode\n');
+    fs.writeFileSync(excludedFile(), IS_WIN ? '# Apps where Drag Shelf must never pop up. One executable name per line.\n# Example:\n# POWERPNT.EXE\n' : '# Apps where Drag Shelf must never pop up. One per line: the app name or bundle id.\n# Example:\n# Keynote\n# com.apple.dt.Xcode\n');
   }
 }
 function isExcluded(snap) {
@@ -124,7 +126,8 @@ function startWatching() {
   watch.on('trigger', async (pt, baselineP) => {
     if (!shelfWin || shelfWin.isVisible()) return;
     let snap = null, base = null;
-    if (IS_MAC) [snap, base] = await Promise.all([systemSnapshot(), baselineP || Promise.resolve(null)]);
+    [snap, base] = await Promise.all([systemSnapshot(), baselineP || Promise.resolve(null)]);
+    if (snap && (snap.suppressed || (IS_WIN && store.settings.strict && !snap.dragging))) return;
     if (store.settings.strict && snap && base && snap.cc === base.cc) return;   // not a real drag session
     if (snap) { lastApp = snap.name || lastApp; if (isExcluded(snap)) return; }
     if (!watch.tracking) return;                                                  // already released
@@ -204,6 +207,7 @@ function closePhone() { if (phoneWin && !phoneWin.isDestroyed()) phoneWin.close(
 function openGuide() {
   if (guideWin && !guideWin.isDestroyed()) { guideWin.focus(); return; }
   guideWin = new BrowserWindow({
+    useContentSize: true, autoHideMenuBar: true, icon: B('icon.png'),
     width: 560, height: 560, show: false, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
     title: 'Welcome to Drag Shelf', titleBarStyle: IS_MAC ? 'hiddenInset' : 'default', backgroundColor: '#242520', alwaysOnTop: true,
     webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true }
@@ -215,6 +219,7 @@ function openGuide() {
 
 // ───────────────────────────────────────────────────────── tray + menus
 function trayImage() {
+  if (!IS_MAC) return nativeImage.createFromPath(B('icon.png')).resize({ width: 20, height: 20 });
   const img = nativeImage.createFromPath(B('trayTemplate.png'));
   img.addRepresentation({ scaleFactor: 2, buffer: fs.readFileSync(B('trayTemplate@2x.png')) });
   img.setTemplateImage(true); return img;
@@ -235,16 +240,19 @@ function buildTrayMenu() {
     { label: 'Clear all shelves', click: () => { store.clearAll(); pushState(); if (!pinned) hideShelf(); } },
     { label: 'Remove items after dragging them out', type: 'checkbox', checked: st.moveOnDragOut, click: set('moveOnDragOut', !st.moveOnDragOut) },
     { label: 'Strict drag detection', type: 'checkbox', checked: st.strict, click: set('strict', !st.strict) },
-    { label: 'Start at login', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, click: m => app.setLoginItemSettings({ openAtLogin: m.checked }) },
+    { label: IS_WIN ? 'Start with Windows' : 'Start at login', type: 'checkbox', checked: app.getLoginItemSettings(loginOptions()).openAtLogin, click: m => app.setLoginItemSettings({ ...loginOptions(), openAtLogin: m.checked }) },
     ...(lastApp ? [{ label: `Never show over ${lastApp}`, click: () => { ensureExcluded(); fs.appendFileSync(excludedFile(), lastApp + '\n'); } }] : []),
     { label: 'Edit excluded apps…', click: () => { ensureExcluded(); shell.openPath(excludedFile()); } },
     { type: 'separator' },
     ...(IS_MAC ? [{ label: hooksOn ? 'Drag detection: on' : 'Enable drag detection…', enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
     { label: 'Show guide', click: openGuide },
+    { label: 'Privacy policy', click: () => shell.openExternal('https://github.com/im4tta/dragshelf/blob/main/PRIVACY.md') },
+    { label: 'Help and support', click: () => shell.openExternal('https://github.com/im4tta/dragshelf/issues') },
     { label: 'About Drag Shelf', click: () => app.showAboutPanel() },
-    { label: 'Quit Drag Shelf', accelerator: 'Command+Q', click: () => app.quit() }
+    { label: 'Quit Drag Shelf', accelerator: IS_MAC ? 'Command+Q' : undefined, click: () => app.quit() }
   ]);
 }
+function loginOptions() { return IS_WIN ? { path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, args: [] } : {}; }
 function createTray() {
   try {
     tray = new Tray(trayImage()); tray.setToolTip('Drag Shelf');
@@ -334,13 +342,17 @@ function wireIpc() {
 }
 
 // ───────────────────────────────────────────────────────── lifecycle
-app.on('second-instance', () => { if (shelfWin) toggleShelf(true); });
+app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
-app.on('before-quit', () => { if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); });
+app.on('before-quit', () => { if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.whenReady().then(() => {
   if (IS_MAC && app.dock) app.dock.hide();
+  if (IS_WIN && !TEST && process.env.LOCALAPPDATA) {
+    try { require('./windows-migration').importWindowsShelves(path.join(process.env.LOCALAPPDATA, 'DragShelf'), app.getPath('userData')); }
+    catch (error) { console.warn('Legacy shelves could not be imported:', error.message); }
+  }
   store = new Store(app.getPath('userData'));
   stash = new Stash(path.join(app.getPath('userData'), 'stash'));
   phone = new PhoneServer(stash.dir);

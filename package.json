@@ -1,7 +1,7 @@
 {
   "name": "dragshelf",
   "productName": "Drag Shelf",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A temporary shelf for files, links, text and images. Shake while dragging and drop it on the shelf.",
   "main": "src/main/main.js",
   "license": "MIT",
@@ -24,6 +24,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node scripts/selftest.js",
+    "test:migration": "node --test scripts/windows-migration.test.js",
+    "dist:win": "electron-builder --win --x64 --publish never",
     "icons": "python3 scripts/make_icons.py",
     "screenshots": "node scripts/screenshots.js",
     "dist": "electron-builder --mac --x64 --arm64 -c.mac.identity=- -c.mac.hardenedRuntime=false",

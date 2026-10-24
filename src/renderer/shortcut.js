@@ -12,12 +12,12 @@ function keyName(code) {
 function show(mods, key, cls) {
   const el = $('#keys'); el.className = 'keys ' + (cls || '');
   const caps = [];
-  if (mods.ctrl) caps.push('⌃'); if (mods.alt) caps.push('⌥'); if (mods.shift) caps.push('⇧'); if (mods.meta) caps.push('⌘');
+  if (mods.ctrl) caps.push(mac ? '⌃' : 'Ctrl'); if (mods.alt) caps.push(mac ? '⌥' : 'Alt'); if (mods.shift) caps.push(mac ? '⇧' : 'Shift'); if (mods.meta) caps.push(mac ? '⌘' : 'Win');
   if (key) caps.push(key.length === 1 ? key.toUpperCase() : key);
   el.innerHTML = caps.length ? caps.map(c => `<span class="keycap">${c}</span>`).join('') : '<span class="keycap ghost">…</span>';
 }
 show({}, '');
-window.shelf.invoke('shortcut:info').then(i => { mac = i.mac; });
+window.shelf.invoke('shortcut:info').then(i => { mac = i.mac; if (!mac) $('#hint').innerHTML = 'Use <b>Ctrl</b>, <b>Alt</b> or <b>Win</b> together with a key.<br>Esc cancels.'; });
 window.shelf.invoke('state:get').catch(() => 0);
 addEventListener('keydown', async e => {
   e.preventDefault(); if (busy) return;
@@ -27,10 +27,10 @@ addEventListener('keydown', async e => {
   show(mods, key);
   if (!key || !(mods.ctrl || mods.alt || mods.meta)) return;
   busy = true;
-  const accel = [mods.meta ? 'Command' : '', mods.ctrl ? 'Control' : '', mods.alt ? 'Alt' : '', mods.shift ? 'Shift' : '', key].filter(Boolean).join('+');
+  const accel = [mods.meta ? (mac ? 'Command' : 'Super') : '', mods.ctrl ? 'Control' : '', mods.alt ? 'Alt' : '', mods.shift ? 'Shift' : '', key].filter(Boolean).join('+');
   const r = await window.shelf.invoke('shortcut:set', accel);
   if (r.ok) { show(mods, key, 'ok'); $('#hint').textContent = 'Saved.'; }
-  else { show(mods, key, 'bad'); const h = $('#hint'); h.className = 'hint bad'; h.textContent = 'That shortcut is already used by macOS or another app. The previous one stays active.'; setTimeout(() => { busy = false; h.className = 'hint'; h.innerHTML = 'Try another combination.<br>Esc cancels.'; show({}, ''); }, 2400); }
+  else { show(mods, key, 'bad'); const h = $('#hint'); h.className = 'hint bad'; h.textContent = 'That shortcut is already used by the system or another app. The previous one stays active.'; setTimeout(() => { busy = false; h.className = 'hint'; h.innerHTML = 'Try another combination.<br>Esc cancels.'; show({}, ''); }, 2400); }
 });
 addEventListener('keyup', e => { if (!busy) show({ ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey }, ''); });
 window.shelf.on('state', s => { document.documentElement.dataset.accent = s.settings.accent; document.documentElement.dataset.scheme = s.settings.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : s.settings.theme; });

@@ -3,8 +3,8 @@ const $ = s => document.querySelector(s);
 const PAGES = [
   { t: 'Drag a file, then shake', d: () => 'Start dragging a file anywhere, then <b>shake the mouse</b> – or push it against a screen edge. The shelf pops up right next to your cursor.' },
   { t: 'Drop it on the shelf', d: () => 'Drop <b>files, folders, links, text or images</b> on it. Files are only referenced, so even huge ones land instantly. Tick the circle to mark something as done.' },
-  { t: 'Take it back out', d: () => 'Drag an item – or <b>Drag all</b> – to where you need it. Reorder by dragging inside the shelf. Items leave the shelf once dropped; hold <b>⌥</b> to keep them.' },
-  { t: 'Tabs, phone photos, shortcut', d: i => `Use <b>+</b> for more shelves, scan the phone QR to send photos over your Wi-Fi, and press <b>${i.hotkey}</b> any time. Everything else lives in the menu bar icon.` }
+  { t: 'Take it back out', d: i => `Drag an item – or <b>Drag all</b> – to where you need it. Reorder by dragging inside the shelf. Items leave the shelf once dropped; hold <b>${i.mac ? '⌥' : 'Ctrl'}</b> to keep them.` },
+  { t: 'Tabs, phone photos, shortcut', d: i => `Use <b>+</b> for more shelves, scan the phone QR to send photos over your Wi-Fi, and press <b>${i.hotkey}</b> any time. Everything else lives in the ${i.mac ? 'menu bar' : 'system tray'} icon.` }
 ];
 let page = 0, info = { hotkey: '⌥⇧S', mac: true };
 const dots = $('#dots'); PAGES.forEach(() => dots.appendChild(document.createElement('i')));
@@ -16,7 +16,8 @@ function show(p) {
   $('#title').textContent = PAGES[page].t; $('#desc').innerHTML = PAGES[page].d(info);
   [...dots.children].forEach((d, i) => d.classList.toggle('on', i === page));
   $('#back').hidden = page === 0; $('#next').textContent = page === PAGES.length - 1 ? 'Get started' : 'Next';
-  const parts = String(info.hotkey).match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘]+/g) || [];
+  const parts = info.mac ? String(info.hotkey).match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘]+/g) || [] : String(info.hotkey).split('+');
+  document.querySelector('.note .keycap').textContent = info.mac ? '⌥' : 'Ctrl';
   document.querySelectorAll('.keys .keycap').forEach((k, i) => { k.textContent = parts[i] || ''; k.style.display = parts[i] ? '' : 'none'; });
 }
 $('#next').onclick = () => (page === PAGES.length - 1 ? window.shelf.send('guide:done') : show(page + 1));

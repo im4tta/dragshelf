@@ -64,8 +64,8 @@ function render() {
   $('#clearDone').style.display = done > 0 ? 'inline-block' : 'none';
   $('#dragAll').innerHTML = `${window.glyph('stack')}Drag all · ${n}`;
   $('#empty .zone-ico').innerHTML = window.glyph('drop');
-  $('#empty .zone-s').textContent = S.hooks === false && S.platform === 'darwin'
-    ? `Press ${S.settings.hotkeyLabel} or click the menu bar icon` : 'Or drag something and shake the mouse';
+  $('#empty .zone-s').textContent = S.hooks === false
+    ? `Press ${S.settings.hotkeyLabel} or click the ${S.platform === 'darwin' ? 'menu bar' : 'tray'} icon` : 'Or drag something and shake the mouse';
   requestAnimationFrame(reportSize);
 }
 

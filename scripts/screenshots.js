@@ -4,14 +4,14 @@
 const { _electron: electron } = require('playwright-core');
 const fs = require('fs'), os = require('os'), path = require('path');
 const seed = require('./demo-data');
-const ROOT = path.join(__dirname, '..'), OUT = path.join(ROOT, 'docs', 'screenshots');
+const ROOT = path.join(__dirname, '..'), OUT = process.env.DRAGSHELF_SCREENSHOT_DIR || path.join(ROOT, 'docs', process.platform === 'win32' ? 'screenshots-windows' : 'screenshots');
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const url = p => 'file://' + p;
+const url = p => require('url').pathToFileURL(p).href;
 
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dsS-')); const { ud, files } = seed(tmp);
-  const app = await electron.launch({ args: [ROOT, '--no-sandbox', '--force-device-scale-factor=2'], env: { ...process.env, DRAGSHELF_TEST: '1', DRAGSHELF_USER_DATA: ud, DRAGSHELF_FAKE_IP: '192.168.1.42', DRAGSHELF_MAC_LABELS: '1' } });
+  const app = await electron.launch({ args: [ROOT, '--no-sandbox', '--force-device-scale-factor=2'], env: { ...process.env, DRAGSHELF_TEST: '1', DRAGSHELF_USER_DATA: ud, DRAGSHELF_FAKE_IP: '192.168.1.42', DRAGSHELF_MAC_LABELS: process.platform === 'darwin' ? '1' : '' } });
   const page = await app.firstWindow();
   page.on('pageerror', e => console.log('[pageerror]', e.message));
   await app.evaluate(() => global.__test.showShelf()); await page.waitForSelector('.row');

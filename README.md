@@ -7,7 +7,7 @@
 **A temporary shelf for the files, links, text and images you're moving around.**
 Start dragging, shake the mouse, drop it on the shelf, grab it again when you need it.
 
-Apple Silicon · Intel · Universal &nbsp;|&nbsp; macOS 11+ &nbsp;|&nbsp; MIT licensed
+Windows x64 · Apple Silicon · Intel · Universal &nbsp;|&nbsp; MIT licensed
 
 <img src="docs/screenshots/00-hero.png" alt="Drag Shelf – dark and light theme">
 
@@ -19,7 +19,9 @@ Apple Silicon · Intel · Universal &nbsp;|&nbsp; macOS 11+ &nbsp;|&nbsp; MIT li
 
 Grab the build for your computer from the **[Releases](../../releases)** page.
 
-**Windows 10/11 (x64):** download and run `DragShelf-1.0.0-windows-x64.exe`. This is the portable native Windows app; no installer is required. Its default shortcut is **Ctrl+Shift+F**.
+**Windows 10/11 (x64):** download `DragShelf-<version>-windows-x64-setup.exe` to install, or `DragShelf-<version>-windows-x64-portable.exe` to run without installation. Version 1.1 brings the same interface as macOS: rich file rows, completion ticks, confetti, eight accents, multiple shelves, phone transfers and the animated guide. The default shortcut is **Ctrl+Shift+F**. Existing shelves from the old native Windows app are imported once; the original data is retained.
+
+<img src="docs/screenshots-windows/01-shelf-dark.png" width="300" alt="The shared Drag Shelf interface running on Windows in dark theme"> <img src="docs/screenshots-windows/02-shelf-light.png" width="300" alt="Drag Shelf on Windows in light theme">
 
 **macOS:** choose the build for your Mac:
 
@@ -123,9 +125,18 @@ Quit Drag Shelf
 
 ### Microsoft Store package
 
-The native Windows app can be packaged as MSIX with Store-managed signing after certification. See [Microsoft Store submission](windows/store/SUBMISSION.md) for registration, package identity, building, testing and listing materials. Automatic MSIX validation builds are not submission packages.
+The Microsoft Store draft and MSIX workflow currently use the older native Windows app. Store submission is on hold; the improved Electron Windows interface is distributed through the GitHub installer and portable downloads. See [Microsoft Store submission](windows/store/SUBMISSION.md) for the earlier draft materials.
 
-Requirements: macOS, Node 20+.
+Requirements: Node 20+ and macOS or Windows. On Windows, building requires an x64 Visual Studio Developer Command Prompt for the small desktop-context helper:
+
+```cmd
+npm ci
+cl /nologo /std:c++17 /EHsc /O2 /MT /DNOMINMAX windows\desktop-helper.cpp /Fe:build\win-helper.exe /Fo:build\win-helper.obj /link user32.lib shell32.lib
+npm start
+npm run dist:win
+```
+
+On macOS:
 
 ```bash
 git clone https://github.com/im4tta/dragshelf.git && cd dragshelf
@@ -140,7 +151,7 @@ npm run dist:universal   # → dist/DragShelf-<v>-mac-universal.dmg
 
 ### GitHub Actions
 
-`.github/workflows/build.yml` runs the self-test on Linux, builds the native **Windows x64 EXE** with MSVC, and builds **x64, arm64 and universal** DMG/ZIPs on a macOS runner. Both platform builds must succeed before their files are attached to one release. Push a tag to publish a release:
+`.github/workflows/build.yml` runs the self-test on Linux and Windows, tests the packaged Windows app, builds **Windows x64 installer and portable EXEs**, and builds **x64, arm64 and universal** DMG/ZIPs on macOS. Windows screenshots are captured from the running app. Both platform builds must succeed before their files are attached to one release. Push a tag to publish a release:
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0
@@ -173,14 +184,14 @@ src/preload/     the small, whitelisted bridge to the UI
 src/renderer/    shelf, guide, phone and shortcut windows (plain HTML/CSS/JS)
 build/           app icon (.icns/.png), menu bar template icons, entitlements
 scripts/         icon generator, demo data, self-test, screenshot generator
-windows/         the original Windows version's C++ source (this app is its macOS port)
+windows/         small Windows desktop-context helper; legacy C++ app and Store draft
 ```
 
 User data lives in `~/Library/Application Support/Drag Shelf/` (`shelves.json`, `settings.json`, `excluded.txt`, `stash/`).
 
-## Differences from the Windows version
+## Platform conventions
 
-This is a re-implementation, not a recompile (the original is native Win32/OLE). Same ideas, Mac conventions:
+Windows and macOS now share the same Electron UI and features. Platform conventions remain familiar:
 
 | Windows | macOS |
 |---|---|
@@ -190,7 +201,7 @@ This is a re-implementation, not a recompile (the original is native Win32/OLE).
 | Start with Windows | Start at login |
 | `.url` files for links | `.webloc` files |
 | Skips fullscreen games / presentations | Per-app exclusion list (no public macOS API for this) |
-| – | New: done/not-done ticks, `done/total` counter, Quick Look thumbnails, row context menu, accent colours |
+| Native Windows thumbnails | macOS Quick Look thumbnails |
 
 ## Troubleshooting
 
