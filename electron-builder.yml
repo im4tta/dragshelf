@@ -17,6 +17,8 @@ npmRebuild: false      # uiohook-napi ships N-API prebuilds for darwin-x64 and d
 asarUnpack:
   - "**/*.node"
 mac:
+  # Both architecture-specific prebuilds are shipped unchanged in each app.
+  x64ArchFiles: "**/uiohook-napi/prebuilds/darwin-*/*.node"
   category: public.app-category.productivity
   icon: build/icon.icns
   # Menu-bar app: no Dock icon, no app-switcher entry.
