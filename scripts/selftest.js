@@ -16,13 +16,7 @@ const httpReq = (url, opt = {}, body) => new Promise((res, rej) => { const r = h
   const launch = () => electron.launch({ ...(process.env.DRAGSHELF_TEST_EXE ? { executablePath: process.env.DRAGSHELF_TEST_EXE } : {}), args: [ROOT, '--no-sandbox'], env: { ...process.env, DRAGSHELF_TEST: '1', DRAGSHELF_USER_DATA: ud, DRAGSHELF_FAKE_IP: '127.0.0.1' } });
   let app = await launch(); let page = await app.firstWindow();
   if (process.platform === 'win32' && process.env.CI) {
-    const nativeReady = await app.evaluate(async () => {
-      const path = require('path');
-      const root = require('electron').app.getAppPath();
-      const snapshot = await require(path.join(root, 'src/main/windows-context')).snapshot();
-      const { uIOhook } = require('uiohook-napi'); uIOhook.start(); uIOhook.stop();
-      return snapshot && typeof snapshot.dragging === 'boolean';
-    });
+    const nativeReady = await app.evaluate(() => global.__test.windowsReady());
     ok(nativeReady, 'Windows desktop context and native mouse hook load in the running app');
   }
   const errors = []; page.on('pageerror', e => errors.push(e.message));

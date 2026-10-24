@@ -40,7 +40,8 @@ function accelLabel(a) {
   const order = ['Control', 'Ctrl', 'Alt', 'Option', 'Shift', 'Command', 'Cmd', 'CommandOrControl', 'Super', 'Meta'];
   const mods = parts.sort((x, y) => order.indexOf(x) - order.indexOf(y));
   if (IS_MAC || process.env.DRAGSHELF_MAC_LABELS) return mods.map(m => SYMS[m] || m).join('') + (key.length === 1 ? key.toUpperCase() : key);
-  return [...mods.map(m => (m === 'CommandOrControl' ? 'Ctrl' : m)), key].join('+');
+  const labels = { CommandOrControl: 'Ctrl', Control: 'Ctrl', Super: 'Win', Meta: 'Win', Option: 'Alt' };
+  return [...mods.map(m => labels[m] || m), key].join('+');
 }
 function excludedFile() { return path.join(app.getPath('userData'), 'excluded.txt'); }
 function ensureExcluded() {
@@ -368,6 +369,11 @@ app.whenReady().then(() => {
 
   if (TEST) {   // automated screenshots drive the app through these hooks
     global.__test = {
+      windowsReady: async () => {
+        const snapshot = await require('./windows-context').snapshot();
+        const { uIOhook } = require('uiohook-napi'); uIOhook.start(); uIOhook.stop();
+        return snapshot && typeof snapshot.dragging === 'boolean';
+      },
       shelfWin: () => shelfWin, phoneWin: () => phoneWin, guideWin: () => guideWin, keyWin: () => keyWin,
       showShelf: () => { placeCard(80, 60); shelfWin.showInactive(); pushState(); },
       openPhone, openGuide, openShortcutWindow, pushState, store: () => store

@@ -103,6 +103,7 @@ const url = p => require('url').pathToFileURL(p).href;
     }, { f, w, h }).then(b64 => fs.writeFileSync(path.join(OUT, out), Buffer.from(b64, 'base64')));
     console.log('  ✓', out);
   };
+  const platformChips = process.platform === 'win32' ? '<span class="a">Windows</span><span>Installer + portable</span>' : '<span class="a">macOS</span><span>Apple Silicon</span><span>Intel</span>';
   const css = `<link rel="stylesheet" href="${url(path.join(ROOT, 'src/renderer/common.css'))}"><style>
     body{margin:0;font-family:var(--font);color:#f4f5ee;background:#14150f;overflow:hidden} .abs{position:absolute}
     h1,h2,p{margin:0} .cap{font-size:15px;font-weight:600;color:#c9cabf;text-align:center;margin-top:6px}</style>`;
@@ -113,7 +114,7 @@ const url = p => require('url').pathToFileURL(p).href;
     .t p{font-size:26px;color:#a9aa9e;line-height:1.4;margin-top:14px;max-width:470px} .chips{margin-top:26px;display:flex;gap:10px}
     .chips span{font-size:15px;font-weight:650;padding:9px 16px;border-radius:999px;background:#2c2d27;color:#f4f5ee}.chips span.a{background:#f5c63a;color:#242520}
     .l{left:790px;top:48px;width:356px;transform:rotate(5deg);opacity:.96}.d{left:640px;top:56px;width:356px;transform:rotate(-3deg)} img.s{display:block;width:100%}
-  </style><div class="abs t"><img src="${img('../../build/icon.png')}"><h1>Drag Shelf</h1><p>A temporary shelf for the files, links, text and images you’re moving around.</p><div class="chips"><span class="a">macOS</span><span>Apple Silicon</span><span>Intel</span><span>Free &amp; open source</span></div></div>
+  </style><div class="abs t"><img src="${img('../../build/icon.png')}"><h1>Drag Shelf</h1><p>A temporary shelf for the files, links, text and images you’re moving around.</p><div class="chips">${platformChips}<span>Free &amp; open source</span></div></div>
   <div class="abs l"><img class=s src="${img('02-shelf-light.png')}"></div><div class="abs d"><img class=s src="${img('01-shelf-dark.png')}"></div>`, 1280, 720, '00-hero.png');
 
   await compose(`<!doctype html><meta charset=utf-8>${css}<style>body{width:1400px;height:1300px;background:#14150f;padding:34px 40px;box-sizing:border-box}
