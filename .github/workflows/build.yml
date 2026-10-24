@@ -42,8 +42,7 @@ jobs:
         if: env.CSC_LINK == ''
         run: |
           unset CSC_LINK
-          npx electron-builder --mac --x64 --arm64 --universal --publish never \\
-            -c.mac.identity=- -c.mac.hardenedRuntime=false
+          npx electron-builder --mac --x64 --arm64 --universal --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false
 
       # With secrets CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
       # the build is Developer-ID signed and notarized, so it opens without any warning.
