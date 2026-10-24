@@ -37,7 +37,7 @@ No signing key is included in this repository. Microsoft signs the certified Sto
 - Check the privacy and support links open correctly.
 - On a trusted private network, verify optional phone uploads and that closing the transfer window stops new uploads. Check Windows firewall behavior on a clean machine. Do not claim phone transfer works on every network without testing.
 - Check uninstall and update behavior. Original files referenced by shelves must remain intact.
-- Capture actual **Windows** screenshots from the tested build. Do not upload the macOS screenshots in `docs/screenshots` as Windows screenshots.
+- Capture actual **Windows** screenshots from the tested build. At least one PC screenshot is required: PNG, at least 1366 x 768 pixels and under 50 MB. Aim for three useful views: shelf with harmless sample files, multiple shelves, and the guide or theme menu. Do not upload the macOS screenshots in `docs/screenshots` as Windows screenshots.
 
 ## Listing text (English, United States)
 
