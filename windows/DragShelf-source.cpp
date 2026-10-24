@@ -38,6 +38,8 @@
 #define ID_HOTKEY    20
 #define ID_PHONE     21
 #define ID_GUIDE     22
+#define ID_PRIVACY   23
+#define ID_SUPPORT   24
 #define ID_THEME0    100
 #define ID_ACC0      110
 
@@ -735,11 +737,17 @@ static void TrayMenu() {
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_CLEARALL, L"Clear all shelves");
     AppendMenuW(m, MF_STRING | (g_strict ? MF_CHECKED : 0), ID_STRICT, L"Strict drag detection");
+#ifdef DRAGSHELF_STORE
+    AppendMenuW(m, MF_STRING, ID_AUTOSTART, L"Startup settings...");
+#else
     AppendMenuW(m, MF_STRING | (AutostartOn() ? MF_CHECKED : 0), ID_AUTOSTART, L"Start with Windows");
+#endif
     if (!g_lastExe.empty()) AppendMenuW(m, MF_STRING, ID_EXCL_LAST, (L"Never show over " + g_lastExe).c_str());
     AppendMenuW(m, MF_STRING, ID_EXCL_EDIT, L"Edit excluded apps...");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_GUIDE, L"Show guide");
+    AppendMenuW(m, MF_STRING, ID_PRIVACY, L"Privacy policy");
+    AppendMenuW(m, MF_STRING, ID_SUPPORT, L"Help and support");
     AppendMenuW(m, MF_STRING, ID_EXIT, L"Exit");
     POINT pt; GetCursorPos(&pt); SetForegroundWindow(g_hwnd);
     TrackPopupMenu(m, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, g_hwnd, nullptr);
@@ -1306,7 +1314,15 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         switch (LOWORD(w)) {
         case ID_SHOW: if (IsWindowVisible(h)) HideShelf(); else { POINT pt; GetCursorPos(&pt); g_pinned = true; ShowShelfAt(pt); } break;
         case ID_STRICT: g_strict = !g_strict; WritePrivateProfileStringW(L"main", L"strict", g_strict ? L"1" : L"0", IniPath().c_str()); break;
-        case ID_AUTOSTART: SetAutostart(!AutostartOn()); break;
+        case ID_AUTOSTART:
+#ifdef DRAGSHELF_STORE
+            ShellExecuteW(nullptr, L"open", L"ms-settings:startupapps", nullptr, nullptr, SW_SHOWNORMAL);
+#else
+            SetAutostart(!AutostartOn());
+#endif
+            break;
+        case ID_PRIVACY: ShellExecuteW(nullptr, L"open", L"https://github.com/im4tta/dragshelf/blob/main/PRIVACY.md", nullptr, nullptr, SW_SHOWNORMAL); break;
+        case ID_SUPPORT: ShellExecuteW(nullptr, L"open", L"https://github.com/im4tta/dragshelf/issues", nullptr, nullptr, SW_SHOWNORMAL); break;
         case ID_EXCL_EDIT: EnsureExcludedFile(); ShellExecuteW(nullptr, L"open", L"notepad.exe", (g_dataDir + L"\\excluded.txt").c_str(), nullptr, SW_SHOWNORMAL); break;
         case ID_EXCL_LAST: { EnsureExcludedFile(); std::string line = ToUtf8(g_lastExe) + "\r\n";
             HANDLE f = CreateFileW((g_dataDir + L"\\excluded.txt").c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);

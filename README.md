@@ -121,6 +121,10 @@ Quit Drag Shelf
 
 ## Build it yourself
 
+### Microsoft Store package
+
+The native Windows app can be packaged as MSIX with Store-managed signing after certification. See [Microsoft Store submission](windows/store/SUBMISSION.md) for registration, package identity, building, testing and listing materials. Automatic MSIX validation builds are not submission packages.
+
 Requirements: macOS, Node 20+.
 
 ```bash
