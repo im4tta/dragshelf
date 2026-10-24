@@ -41,7 +41,8 @@ jobs:
       - name: Build (ad-hoc signed)
         if: env.CSC_LINK == ''
         run: |
-          npx electron-builder --mac --x64 --arm64 --universal --publish never \
+          unset CSC_LINK
+          npx electron-builder --mac --x64 --arm64 --universal --publish never \\
             -c.mac.identity=- -c.mac.hardenedRuntime=false
 
       # With secrets CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
