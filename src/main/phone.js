@@ -65,7 +65,14 @@ class PhoneServer extends EventEmitter {
     const qr = await QRCode.toString(this.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
     return { url: this.url, qr, count: this.count };
   }
-  stop() { if (this.server) { this.server.close(); this.server.closeAllConnections && this.server.closeAllConnections(); this.server = null; } }
+  stop() {
+    // close() can synchronously re-enter shutdown through a window/app event.
+    // Detach first and finish closing the captured server, never a mutable field.
+    const server = this.server; this.server = null; this.url = '';
+    if (!server) return;
+    server.close();
+    if (server.closeAllConnections) server.closeAllConnections();
+  }
 
   _handle(req, res, token) {
     const reply = (code, body, type = 'text/plain') => { res.writeHead(code, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'close' }); res.end(body); };

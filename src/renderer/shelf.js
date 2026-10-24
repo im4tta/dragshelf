@@ -29,6 +29,7 @@ function render() {
   if (!S) return;
   const scheme = S.settings.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : S.settings.theme;
   root.dataset.scheme = scheme; root.dataset.accent = S.settings.accent;
+  if (S.viewport) root.style.setProperty('--shelf-max-height', `${S.viewport.maxCardHeight}px`);
 
   const sh = cur(), items = sh.items, done = items.filter(i => i.done).length;
   $('#counter').textContent = `${done}/${items.length}`;

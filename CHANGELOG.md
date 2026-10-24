@@ -4,6 +4,8 @@
 - Windows now uses the same Electron interface as macOS, replacing the older native UI in GitHub downloads.
 - Added Windows installer and portable builds, platform shortcuts and link files, DPI-aware drag placement, native foreground-app checks and one-time import of old Windows shelves.
 - Added real Windows screenshots and source/packaged Windows end-to-end tests.
+- Panels fit smaller/high-DPI work areas with a scrolling shelf, compact guide and scrollable phone panel.
+- Fixed a reentrant phone-server shutdown crash when closing windows or quitting.
 - The Microsoft Store draft remains paused on the earlier native implementation.
 
 ## 1.0.0

@@ -31,6 +31,8 @@ let lastApp = '';
 let hooksOn = false;
 let moveStart = null;
 let dragIcon = null;
+let testWorkArea = null;
+function workAreaAt(pt = screen.getCursorScreenPoint()) { return (TEST && testWorkArea) || screen.getDisplayNearestPoint(pt).workArea; }
 
 // ───────────────────────────────────────────────────────── helpers
 const clamp = (v, a, b) => Math.max(a, Math.min(v, Math.max(a, b)));
@@ -65,6 +67,7 @@ async function buildState() {
   })));
   const st = store.settings;
   return {
+    viewport: { maxCardHeight: workAreaAt(shelfWin ? { x: shelfWin.getBounds().x + PAD, y: shelfWin.getBounds().y + PAD } : undefined).height - 2 * PAD - 12 },
     shelves, active: store.active, platform: process.platform,
     settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut },
     phone: !!(phone && phone.running), hooks: hooksOn
@@ -95,12 +98,12 @@ function createShelfWindow() {
   shelfWin.on('closed', () => { shelfWin = null; });
 }
 function placeCard(x, y) {      // x,y = top-left of the visible card
-  const d = screen.getDisplayNearestPoint({ x, y }), wa = d.workArea;
+  const wa = workAreaAt({ x, y });
   const h = shelfWin.getBounds().height - 2 * PAD;
   shelfWin.setPosition(Math.round(clamp(x, wa.x + 6, wa.x + wa.width - CARD_W - 6) - PAD), Math.round(clamp(y, wa.y + 6, wa.y + wa.height - h - 6) - PAD));
 }
 function showShelfAt(pt, pin) {
-  const wa = screen.getDisplayNearestPoint(pt).workArea, h = shelfWin.getBounds().height - 2 * PAD;
+  const wa = workAreaAt(pt), h = shelfWin.getBounds().height - 2 * PAD;
   let x = pt.x + 28; if (x + CARD_W > wa.x + wa.width) x = pt.x - CARD_W - 28;
   placeCard(x, pt.y - Math.round(h / 3));
   pinned = pin; pushState(); shelfWin.showInactive();
@@ -166,7 +169,7 @@ function registerHotkey(accel) { try { return globalShortcut.register(accel, () 
 function openShortcutWindow() {
   if (keyWin && !keyWin.isDestroyed()) { keyWin.focus(); return; }
   globalShortcut.unregister(store.settings.hotkey);
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = workAreaAt();
   keyWin = new BrowserWindow({
     width: 380, height: 220, x: Math.round(wa.x + (wa.width - 380) / 2), y: Math.round(wa.y + (wa.height - 220) / 2),
     frame: false, transparent: true, resizable: false, hasShadow: false, alwaysOnTop: true, skipTaskbar: true, show: false, backgroundColor: '#00000000',
@@ -187,7 +190,7 @@ async function openPhone() {
     return;
   }
   if (!shelfWin.isVisible()) showShelfAt(screen.getCursorScreenPoint(), true); else pinned = true;
-  const sb = shelfWin.getBounds(), wa = screen.getDisplayMatching(sb).workArea, W = 300 + 2 * 14, H = 484 + 2 * 14;
+  const sb = shelfWin.getBounds(), wa = workAreaAt({ x: sb.x + PAD, y: sb.y + PAD }), W = 300 + 2 * 14, H = Math.min(484 + 2 * 14, wa.height - 12);
   let x = sb.x + sb.width - PAD + 10 - 14; if (x + W > wa.x + wa.width) x = sb.x + PAD - 10 - W + 14;
   const y = clamp(sb.y + PAD - 14, wa.y, wa.y + wa.height - H);
   phoneWin = new BrowserWindow({
@@ -207,9 +210,10 @@ function closePhone() { if (phoneWin && !phoneWin.isDestroyed()) phoneWin.close(
 // ───────────────────────────────────────────────────────── guide
 function openGuide() {
   if (guideWin && !guideWin.isDestroyed()) { guideWin.focus(); return; }
+  const wa = workAreaAt(), W = Math.min(560, wa.width - 24), H = Math.min(560, wa.height - 60);
   guideWin = new BrowserWindow({
     useContentSize: true, autoHideMenuBar: true, icon: B('icon.png'),
-    width: 560, height: 560, show: false, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    width: W, height: H, x: Math.round(wa.x + (wa.width - W) / 2), y: Math.round(wa.y + (wa.height - H - 32) / 2), show: false, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
     title: 'Welcome to Drag Shelf', titleBarStyle: IS_MAC ? 'hiddenInset' : 'default', backgroundColor: '#242520', alwaysOnTop: true,
     webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true }
   });
@@ -320,7 +324,7 @@ function wireIpc() {
   });
   ipcMain.on('win:resize', (e, h) => {
     if (!shelfWin) return; const b = shelfWin.getBounds(), wa = screen.getDisplayMatching(b).workArea;
-    const H = Math.ceil(h) + 2 * PAD; if (H === b.height) return;
+    const H = Math.min(Math.ceil(h) + 2 * PAD, workAreaAt({ x: b.x + PAD, y: b.y + PAD }).height - 12); if (H === b.height) return;
     shelfWin.setBounds({ x: b.x, y: Math.round(clamp(b.y, wa.y - PAD + 4, wa.y + wa.height - H + PAD - 4)), width: WIN_W, height: H });
   });
   ipcMain.on('win:move-start', () => { moveStart = shelfWin.getPosition(); });
@@ -364,11 +368,13 @@ app.whenReady().then(() => {
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
   wireIpc();
   createShelfWindow();
+  screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) { createTray(); registerHotkey(store.settings.hotkey); startWatching(); }
   if (!TEST && !store.settings.guideDone) openGuide();
 
   if (TEST) {   // automated screenshots drive the app through these hooks
     global.__test = {
+      setWorkArea: area => { testWorkArea = area; pushState(); },
       windowsReady: async () => {
         const snapshot = await require('./windows-context').snapshot();
         const { uIOhook } = require('uiohook-napi'); uIOhook.start(); uIOhook.stop();

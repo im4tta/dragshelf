@@ -11,3 +11,7 @@ Existing `shelves.txt` data in `%LOCALAPPDATA%\DragShelf` is imported only when 
 Use the `*-setup.exe` download for normal installation and stable shortcuts, or `*-portable.exe` to run without installing. These downloads remain unsigned and can still display SmartScreen warnings. The Microsoft Store submission remains paused and still references the old native app.
 
 Verification covers the real Windows Electron UI, the packaged executable, native hook/context loading, local phone transfers, persistence and one-time shelf migration. Screenshots in `docs/screenshots-windows` come from the running Windows app; macOS references stay in `docs/screenshots`.
+
+The shelf is 320 logical pixels wide and follows Windows display scaling. Its list scrolls to fit the monitor's usable work area. On shorter displays the guide uses a compact text layout, while the phone panel scrolls. Automated work-area tests cover 1366×768 at 100% and 150%, 1080p at 150%, and 4K at 200%; physical multi-monitor testing remains dependent on the user's hardware. The screenshot generator deliberately uses 2× scaling for crisp documentation captures; production launches do not.
+
+Phone-server shutdown is idempotent, including nested window-close/app-quit calls, and has regression coverage for reentrant shutdown and repeated start/stop cycles.
