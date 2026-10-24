@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Drag Shelf</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="shelf.css">
+</head>
+<body>
+  <div id="frame">
+    <main id="card">
+      <header id="top">
+        <div id="grip" title="Drag to move"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <nav id="tabs"></nav>
+        <button id="addTab" title="New shelf">+</button>
+        <span id="counter" title="Done / total on this shelf">0/0</span>
+        <button id="phoneBtn" class="icon" title="Photos from phone"></button>
+        <button id="closeBtn" class="icon" title="Hide shelf"></button>
+      </header>
+
+      <div id="listWrap">
+        <ul id="list"></ul>
+        <div id="insert"></div>
+      </div>
+
+      <section id="empty">
+        <div class="zone">
+          <div class="zone-ico"></div>
+          <div class="zone-t">Drop files, links, text or images here</div>
+          <div class="zone-s">Or drag something and shake the mouse</div>
+        </div>
+      </section>
+
+      <footer id="foot">
+        <div id="dragAll" draggable="true" title="Drag everything on this shelf at once"></div>
+        <span class="sp"></span>
+        <button id="clearDone" class="link">Clear done</button>
+        <button id="clearAll" class="link danger">Clear all</button>
+      </footer>
+
+      <div id="dropHint">Drop to add</div>
+      <div id="confetti"></div>
+    </main>
+  </div>
+  <script src="icons.js"></script>
+  <script src="shelf.js"></script>
+</body>
+</html>

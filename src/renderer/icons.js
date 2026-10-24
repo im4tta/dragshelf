@@ -1,0 +1,24 @@
+// Stroke glyphs (24×24 viewBox) used for tiles. Shared by the shelf and the guide.
+window.GLYPH = {
+  file: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
+  pdf: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 14h6M10 17.5h4"/>',
+  doc: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/>',
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>',
+  sheet: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M4 15h16M10 4v16"/>',
+  slides: '<rect x="3.5" y="4.5" width="17" height="11.5" rx="2.5"/><path d="M12 16v3.5M8 20h8"/>',
+  archive: '<rect x="4" y="4" width="16" height="5" rx="1.6"/><path d="M5.5 9v10h13V9M10 13h4"/>',
+  audio: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  video: '<rect x="3.5" y="5.5" width="13" height="13" rx="3"/><path d="M16.5 10l4-2.5v9l-4-2.5z"/>',
+  code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/>',
+  text: '<path d="M5 6.5h14M5 11.5h14M5 16.5h9"/>',
+  link: '<path d="M10 14a4 4 0 005.6 0l3-3a4 4 0 00-5.6-5.6l-1 1"/><path d="M14 10a4 4 0 00-5.6 0l-3 3a4 4 0 005.6 5.6l1-1"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 012-2h4l2 2.5h7a2 2 0 012 2v7.5a2 2 0 01-2 2h-13a2 2 0 01-2-2z"/>',
+  app: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M9 15.5l3-7 3 7M10.2 13.2h3.6"/>',
+  missing: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 16v.4"/>',
+  check: '<path d="M6 12.5l4 4 8-9"/>',
+  phone: '<rect x="7" y="3" width="10" height="18" rx="2.6"/><path d="M10.5 17.8h3"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  stack: '<rect x="4" y="9" width="13" height="10" rx="2.5"/><path d="M7 6h12a1.5 1.5 0 011.5 1.5V16"/>',
+  drop: '<path d="M12 4v11M7.5 11l4.5 4.5L16.5 11M5 19.5h14"/>'
+};
+window.glyph = (name, cls = 'g') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${window.GLYPH[name] || window.GLYPH.file}</svg>`;

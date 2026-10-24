@@ -1,0 +1,35 @@
+{
+  "name": "dragshelf",
+  "productName": "Drag Shelf",
+  "version": "1.0.0",
+  "description": "A temporary shelf for files, links, text and images. Shake while dragging and drop it on the shelf.",
+  "main": "src/main/main.js",
+  "license": "MIT",
+  "author": "Santhon",
+  "private": true,
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "playwright-core": "^1.64.1"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "uiohook-napi": "^1.5.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/im4tta/dragshelf.git"
+  },
+  "homepage": "https://github.com/im4tta/dragshelf",
+  "scripts": {
+    "start": "electron .",
+    "test": "node scripts/selftest.js",
+    "icons": "python3 scripts/make_icons.py",
+    "screenshots": "node scripts/screenshots.js",
+    "dist": "electron-builder --mac --x64 --arm64 -c.mac.identity=- -c.mac.hardenedRuntime=false",
+    "dist:universal": "electron-builder --mac --universal -c.mac.identity=- -c.mac.hardenedRuntime=false"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

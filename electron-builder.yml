@@ -1,0 +1,38 @@
+appId: com.santhon.dragshelf
+productName: Drag Shelf
+copyright: MIT License
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**/*
+  - build/trayTemplate*.png
+  - build/dragicon.png
+  - package.json
+  # only ship the macOS native hook binaries
+  - "!**/node_modules/uiohook-napi/prebuilds/{linux,win32}*/**"
+  - "!**/node_modules/uiohook-napi/{libuiohook,src}/**"
+  - "!**/node_modules/**/{test,tests,docs,*.md,*.map}"
+npmRebuild: false      # uiohook-napi ships N-API prebuilds for darwin-x64 and darwin-arm64
+asarUnpack:
+  - "**/*.node"
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  # Menu-bar app: no Dock icon, no app-switcher entry.
+  extendInfo:
+    LSUIElement: true
+    NSHumanReadableCopyright: MIT License
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  target: [dmg, zip]
+artifactName: DragShelf-${version}-mac-${arch}.${ext}
+dmg:
+  title: Drag Shelf ${version}
+  icon: build/icon.icns
+  contents:
+    - { x: 150, y: 190 }
+    - { x: 390, y: 190, type: link, path: /Applications }
+  window: { width: 540, height: 380 }

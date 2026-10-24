@@ -1,0 +1,72 @@
+name: Build macOS app
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach files to a GitHub Release on tags
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libgbm1 libasound2t64 libgtk-3-0 libnss3
+      - name: End-to-end self test (real Electron app under Xvfb)
+        run: xvfb-run -a npm test
+
+  mac:
+    needs: test
+    runs-on: macos-latest          # Apple Silicon runner; builds x64 + arm64 + universal
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+
+      # Without an Apple Developer certificate the app is ad-hoc signed (works, but Gatekeeper asks once).
+      - name: Build (ad-hoc signed)
+        if: env.CSC_LINK == ''
+        run: |
+          npx electron-builder --mac --x64 --arm64 --universal --publish never \
+            -c.mac.identity=- -c.mac.hardenedRuntime=false
+
+      # With secrets CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+      # the build is Developer-ID signed and notarized, so it opens without any warning.
+      - name: Build (signed + notarized)
+        if: env.CSC_LINK != ''
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac --x64 --arm64 --universal --publish never -c.mac.notarize=true
+
+      - name: Show architectures
+        run: |
+          for d in dist/mac dist/mac-arm64 dist/mac-universal; do
+            [ -d "$d" ] && lipo -archs "$d/Drag Shelf.app/Contents/MacOS/Drag Shelf" | sed "s|^|$d: |"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DragShelf-macOS
+          path: |
+            dist/*.dmg
+            dist/*.zip
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+          generate_release_notes: true
