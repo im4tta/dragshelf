@@ -73,7 +73,7 @@ const url = p => require('url').pathToFileURL(p).href;
   const phone = app.windows().find(w => w.url().includes('phone.html'));
   await phone.waitForSelector('#qr svg'); await phone.evaluate(() => { document.querySelector('#n').textContent = '3'; }); await sleep(200);
   await shot('12-phone-photos.png', phone, '.card'); // card only, crisp edges
-  await phone.click('#stop'); await sleep(500);
+  await Promise.all([phone.waitForEvent('close'), phone.click('#stop', { noWaitAfter: true }).catch(error => { if (!/closed/.test(error.message)) throw error; })]); await sleep(500);
 
   // 13 / 14 shortcut recorder
   await app.evaluate(() => global.__test.openShortcutWindow()); await sleep(1000);

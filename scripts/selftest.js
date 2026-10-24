@@ -91,7 +91,7 @@ const httpReq = (url, opt = {}, body) => new Promise((res, rej) => { const r = h
     ok(up.code === 200, 'upload accepted');
     ok((await st()).shelves[0].items.some(i => /IMG 001\.jpg$/.test(i.p)), 'uploaded photo lands on the shelf');
     ok((await pp.textContent('#n')) === '1', 'received counter = 1');
-    await pp.click('#stop'); await sleep(500);
+    await Promise.all([pp.waitForEvent('close'), pp.click('#stop', { noWaitAfter: true }).catch(error => { if (!/closed/.test(error.message)) throw error; })]); await sleep(500);
     ok(!(await app.evaluate(() => !!global.__test.phoneWin())), 'stop closes the window');
     const dead = await httpReq(info.url).then(() => false, () => true); ok(dead, 'server is shut down afterwards');
   }
