@@ -60,6 +60,8 @@ To notice that you are *dragging something and shaking the mouse*, Drag Shelf ne
 
 ## Features
 
+**Prepare a delivery (1.3):** open a shelf in a companion workspace, check editable requirements, prepare consistently named copies and preview the result. Export a new folder or ZIP with instructions, an offline visual index and a file manifest. Save recipes and restore source references from local delivery history. PNG/JPEG resizing and conversion happen locally; originals stay unchanged. [Delivery guide](docs/DELIVERY.md)
+
 **English + ភាសាខ្មែរ:** switch instantly using the tray/menu-bar **Language / ភាសា** menu or the language selector in the welcome guide. Khmer includes an offline font, localized dates and numbers, menus, onboarding, phone uploads and errors. Existing filenames and shelf names are preserved. Long shelf names wrap rather than being shortened with an ellipsis. [ការណែនាំជាភាសាខ្មែរ](docs/KHMER.md)
 
 | | |

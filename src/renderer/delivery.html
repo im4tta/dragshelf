@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Prepare a delivery</title><link rel="stylesheet" href="common.css"><link rel="stylesheet" href="delivery.css">
+</head><body>
+<header class="appbar"><div class="brand"><img src="../../build/icon.png" alt=""><strong>Drag Shelf</strong></div><div class="window-actions"><select data-language-select aria-label="Language / ភាសា"><option value="en">English</option><option value="km">ភាសាខ្មែរ</option></select><button data-window="minimize" data-i18n-title="minimize"></button><button data-window="maximize" data-i18n-title="maximize"></button><button data-window="close" data-i18n-title="close"></button></div></header>
+<main class="delivery-shell">
+  <aside class="collection" aria-label="Source shelf"><div class="collection-heading"><h2 id="shelfName"></h2><p id="sourceCount"></p></div><ul id="sourceFiles"></ul><div class="collection-footer"><button id="addFiles" class="quiet" data-i18n="addFiles"></button><p data-i18n="dropDelivery"></p></div></aside>
+  <section class="workbench"><header class="workbench-heading"><div><h1 data-i18n="prepareDelivery"></h1><p data-i18n="deliverySubtitle"></p></div></header>
+  <div class="recipebar"><label for="recipe" data-i18n="recipe"></label><select id="recipe"></select><button id="saveRecipe" class="quiet" data-i18n="saveRecipe"></button><button id="historyButton" class="quiet history-toggle"></button></div>
+  <form id="recipeForm" class="recipe-save" hidden><label for="recipeName" data-i18n="recipeName"></label><input id="recipeName" maxlength="120" required><button class="quiet" type="submit" data-i18n="save"></button></form>
+  <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+  <button id="outputOverview" class="output-overview" hidden></button>
+  <div id="busyPanel" class="busy-panel" hidden><span id="busyText"></span><progress id="progress" max="1"></progress><button id="cancelJob" class="quiet" data-i18n="cancel"></button></div>
+  <div class="work-scroll" id="workScroll">
+    <section class="workflow-section"><header class="section-heading"><span class="step">1</span><div><h2 data-i18n="checkReadiness"></h2><p data-i18n="checkHelp"></p></div><button id="runChecks" class="quiet" data-i18n="runChecks"></button></header><div id="requirements"></div><button id="addRequirement" class="text-action" data-i18n="addRequirement"></button><div id="issues" class="issues"></div></section>
+    <section class="workflow-section"><header class="section-heading"><span class="step">2</span><div><h2 data-i18n="prepareCopies"></h2><p data-i18n="copiesHelp"></p></div></header>
+      <div class="settings-grid"><label><span data-i18n="filenameStyle"></span><select id="naming"><option value="original" data-i18n="originalNames"></option><option value="slug" data-i18n="consistentNames"></option><option value="project" data-i18n="projectNames"></option></select></label><label><span data-i18n="resizeImages"></span><select id="resize"><option value="0" data-i18n="keepSize"></option><option value="1024">1024 px</option><option value="1920">1920 px</option><option value="2560">2560 px</option><option value="3840">3840 px</option></select></label></div>
+      <div class="option-grid"><label><input type="checkbox" id="readme"><span data-i18n="addReadme"></span></label><label><input type="checkbox" id="index"><span data-i18n="addContactSheet"></span></label></div>
+      <details class="advanced" id="advanced"><summary data-i18n="moreOptions">More options</summary><div class="settings-grid"><label><span data-i18n="projectName"></span><input id="projectName" maxlength="300"></label><label><span data-i18n="imageFormat"></span><select id="imageFormat"><option value="original" data-i18n="keepFormat"></option><option value="png">PNG</option><option value="jpg">JPEG</option></select></label><label><span data-i18n="maxFileSize"></span><input id="maxMB" type="number" min="0" max="100000" step="0.1"></label><label><span data-i18n="jpegQuality"></span><input id="quality" type="number" min="30" max="100" step="1"></label></div><p class="field-help" data-i18n="resizeHelp"></p><div class="option-grid"><label><input type="checkbox" id="group"><span data-i18n="groupFiles"></span></label><label><input type="checkbox" id="deduplicate"><span data-i18n="skipDuplicates"></span></label></div><label class="notes"><span data-i18n="deliveryNotes"></span><textarea id="notes" rows="3" maxlength="12000"></textarea></label></details>
+    </section>
+    <section class="workflow-section preview-section"><header class="section-heading"><span class="step">3</span><div><h2 data-i18n="deliveryFolder"></h2><p id="previewSummary" data-i18n="previewHelp"></p></div><select id="format" data-i18n-title="outputFormat"><option value="folder" data-i18n="newFolder"></option><option value="zip" data-i18n="zipArchive"></option></select></header><div id="outputPreview" class="preview-grid"></div></section>
+  </div>
+  <footer class="delivery-footer"><p class="safe-note" data-i18n="originalsSafe"></p><button id="revealResult" class="quiet" data-i18n="revealDelivery" hidden></button><button id="primary" class="primary" data-i18n="reviewPreparation"></button></footer>
+  </section>
+  <aside id="historyPanel" class="history-panel" hidden><header><h2 data-i18n="history"></h2><button id="closeHistory" class="quiet" data-i18n-title="close"></button></header><div id="historyList"></div></aside>
+</main>
+<script src="icons.js"></script><script src="../shared/i18n.js"></script><script src="locale.js"></script><script src="delivery.js"></script>
+</body></html>

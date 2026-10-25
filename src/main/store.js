@@ -2,6 +2,7 @@
 // Persistent state: shelves (+ items) and settings, stored as JSON in the user-data folder.
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const DEFAULT_SETTINGS = {
   language: 'auto',
@@ -32,12 +33,14 @@ class Store {
     try {
       const j = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.shelves = (j.shelves || []).map(s => ({
+        id: typeof s.id === 'string' ? s.id : randomUUID(),
+        delivery: s.delivery && typeof s.delivery === 'object' ? s.delivery : null,
         name: String(s.name || 'Shelf'),
         items: (s.items || []).filter(i => i && i.p).map(i => ({ p: i.p, done: !!i.done, added: i.added || Date.now() }))
       }));
       this.active = Math.max(0, Math.min(j.active | 0, this.shelves.length - 1));
     } catch (_) { /* first run */ }
-    if (!this.shelves.length) this.shelves = [{ name: this.defaultShelfName, items: [] }];
+    if (!this.shelves.length) this.shelves = [{ id: randomUUID(), name: this.defaultShelfName, delivery: null, items: [] }];
     try { Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, 'utf8'))); } catch (_) { /* defaults */ }
   }
 
@@ -88,7 +91,7 @@ class Store {
   newShelf(nameFor = n => 'Shelf ' + n) {
     let n = this.shelves.length + 1; const names = new Set(this.shelves.map(s => s.name));
     while (names.has(nameFor(n))) n++;
-    this.shelves.push({ name: nameFor(n), items: [] }); this.save();
+    this.shelves.push({ id: randomUUID(), name: nameFor(n), delivery: null, items: [] }); this.save();
     return this.shelves.length - 1;
   }
   deleteShelf(i) {

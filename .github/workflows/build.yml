@@ -28,6 +28,8 @@ jobs:
       - run: npm run test:unit
       - name: Khmer localization checks
         run: xvfb-run -a npm run test:khmer
+      - name: Delivery workflow checks
+        run: xvfb-run -a npm run test:delivery
 
   mac:
     needs: test
@@ -90,6 +92,8 @@ jobs:
         run: npm run test:display
       - name: Khmer localization checks
         run: npm run test:khmer
+      - name: Delivery workflow checks
+        run: npm run test:delivery
       - name: Build shared UI installer and portable executable
         run: npx electron-builder --win --x64 --publish never
       - name: Test packaged Windows application
@@ -99,6 +103,8 @@ jobs:
           npm test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:khmer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:delivery
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows UI screenshots
         run: npm run screenshots

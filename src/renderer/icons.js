@@ -19,6 +19,12 @@ window.GLYPH = {
   phone: '<rect x="7" y="3" width="10" height="18" rx="2.6"/><path d="M10.5 17.8h3"/>',
   close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   stack: '<rect x="4" y="9" width="13" height="10" rx="2.5"/><path d="M7 6h12a1.5 1.5 0 011.5 1.5V16"/>',
-  drop: '<path d="M12 4v11M7.5 11l4.5 4.5L16.5 11M5 19.5h14"/>'
+  drop: '<path d="M12 4v11M7.5 11l4.5 4.5L16.5 11M5 19.5h14"/>',
+  delivery: '<rect x="3" y="6" width="18" height="15" rx="3"/><path d="M3 11h18M9 6V3h6v3M10 15h4"/>',
+  history: '<path d="M4 7v5h5M4 12a8 8 0 108-8 8 8 0 00-6 2.5M12 8v5l3 2"/>',
+  chevron: '<path d="M8 5l7 7-7 7"/>',
+  arrow: '<path d="M4 12h16M14 6l6 6-6 6"/>',
+  minimize: '<path d="M5 12h14"/>',
+  maximize: '<rect x="5" y="5" width="14" height="14" rx="1"/>'
 };
 window.glyph = (name, cls = 'g') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${window.GLYPH[name] || window.GLYPH.file}</svg>`;

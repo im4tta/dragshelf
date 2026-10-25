@@ -11,6 +11,7 @@ const { Stash } = require('./stash');
 const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
 const I18N = require('../shared/i18n');
+const { Delivery } = require('./delivery');
 function language() { return I18N.resolveLanguage(store && store.settings.language, app.getLocale()); }
 function tr(key, values) { return I18N.t(language(), key, values); }
 function localizedMeta(meta) {
@@ -26,6 +27,7 @@ function updateLanguage() {
   if (guideWin) guideWin.setTitle(tr('welcome'));
   if (phoneWin) phoneWin.setTitle(tr('phoneTitle'));
   if (keyWin) keyWin.setTitle(tr('shortcutTitle'));
+  if (deliveryWin) deliveryWin.setTitle(tr('prepareDelivery'));
   app.setAboutPanelOptions({ applicationName: 'Drag Shelf', applicationVersion: app.getVersion(), copyright: 'MIT License', credits: tr('tagline') });
   pushState();
 }
@@ -42,7 +44,8 @@ if (IS_WIN) app.setAppUserModelId('com.santhon.dragshelf');
 if (process.env.DRAGSHELF_USER_DATA) app.setPath('userData', process.env.DRAGSHELF_USER_DATA);
 if (!TEST && !app.requestSingleInstanceLock()) { app.quit(); }
 
-let store, stash, phone, watch;
+let store, stash, phone, watch, delivery;
+let deliveryWin = null, deliveryShelfId = '', deliveryJobs = null;
 let shelfWin = null, phoneWin = null, guideWin = null, keyWin = null, tray = null;
 let pinned = false;               // opened from tray / hotkey → don't auto-hide when empty
 let dragOut = null;               // { shelf, paths, cancelled } while we are the drag source
@@ -81,6 +84,7 @@ function isExcluded(snap) {
 let pushing = null;
 async function buildState() {
   const shelves = await Promise.all(store.shelves.map(async s => ({
+    id: s.id,
     name: s.name,
     items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added })))
   })));
@@ -96,11 +100,26 @@ function pushState() {
   clearTimeout(pushing);
   pushing = setTimeout(async () => {
     const s = await buildState();
-    for (const w of [shelfWin, phoneWin, guideWin, keyWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
+    for (const w of [shelfWin, phoneWin, guideWin, keyWin, deliveryWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
     refreshTrayTitle();
   }, 16);
 }
 function applyTheme() { nativeTheme.themeSource = store.settings.theme === 'auto' ? 'system' : store.settings.theme; }
+
+function openDelivery() {
+  if (deliveryWin && !deliveryWin.isDestroyed()) { deliveryWin.show(); deliveryWin.focus(); return; }
+  deliveryShelfId = store.cur.id;
+  const wa = workAreaAt(), width = Math.min(1160, wa.width - 24), height = Math.min(820, wa.height - 36);
+  deliveryWin = new BrowserWindow({ width, height, minWidth: Math.min(640, width), minHeight: Math.min(420, height),
+    x: Math.round(wa.x + (wa.width - width) / 2), y: Math.round(wa.y + (wa.height - height) / 2),
+    show: false, frame: false, resizable: true, icon: B('icon.png'), title: tr('prepareDelivery'), backgroundColor: '#242520',
+    webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+  deliveryWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  deliveryWin.webContents.on('will-navigate', event => event.preventDefault());
+  deliveryWin.loadFile(R('delivery.html'), { query: windowQuery() });
+  deliveryWin.once('ready-to-show', () => { shelfWin.hide(); deliveryWin.show(); deliveryWin.focus(); });
+  deliveryWin.on('closed', () => { deliveryWin = null; if (deliveryJobs) deliveryJobs.cancel(); });
+}
 
 // ───────────────────────────────────────────────────────── shelf window
 function createShelfWindow() {
@@ -256,6 +275,7 @@ function buildTrayMenu() {
   return Menu.buildFromTemplate([
     { label: tr(shelfWin && shelfWin.isVisible() ? 'hideShelf' : 'showShelf'), accelerator: undefined, sublabel: accelLabel(st.hotkey), click: () => toggleShelf(true) },
     { label: tr('phoneMenu'), type: 'checkbox', checked: !!(phoneWin && !phoneWin.isDestroyed()), click: openPhone },
+    { label: tr('prepareDelivery'), click: openDelivery },
     { type: 'separator' },
     { label: tr('theme'), submenu: [['auto', IS_MAC ? 'macTheme' : 'systemTheme'], ['light', 'light'], ['dark', 'dark']].map(([v, key]) => ({ label: tr(key), type: 'radio', checked: st.theme === v, click: set('theme', v) })) },
     { label: tr('accent'), submenu: accentNames().map(([v, l]) => ({ label: l, type: 'radio', checked: st.accent === v, click: set('accent', v) })) },
@@ -323,6 +343,7 @@ function wireIpc() {
       case 'move': store.moveItems(p.from, p.paths || [], p.to, p.at); break;
       case 'open': shell.openPath(p.path); break;
       case 'phone': openPhone(); break;
+      case 'delivery': openDelivery(); break;
       case 'setting': store.setSetting(p.key, p.value); if (p.key === 'theme') applyTheme(); if (p.key === 'language') updateLanguage(); break;
       default: break;
     }
@@ -369,7 +390,10 @@ function wireIpc() {
 // ───────────────────────────────────────────────────────── lifecycle
 app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
-app.on('before-quit', () => { if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop(); });
+app.on('before-quit', event => {
+  if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
+  if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
+});
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.whenReady().then(() => {
@@ -381,12 +405,14 @@ app.whenReady().then(() => {
   store = new Store(app.getPath('userData'), tr('shelfName', { n: 1 }));
   stash = new Stash(path.join(app.getPath('userData'), 'stash'));
   phone = new PhoneServer(stash.dir, language);
+  delivery = new Delivery(app.getPath('userData'), require('./delivery-images'));
   dragIcon = nativeImage.createFromPath(B('dragicon.png'));
   ensureExcluded(); applyTheme();
   updateLanguage();
 
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
   wireIpc();
+  deliveryJobs = require('./delivery-ipc')({ window: () => deliveryWin, shelfId: () => deliveryShelfId, setShelfId: value => { deliveryShelfId = value; }, store: () => store, service: () => delivery, state: buildState, language, t: tr, push: pushState, test: () => TEST });
   createShelfWindow();
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) { createTray(); registerHotkey(store.settings.hotkey); startWatching(); }
@@ -403,7 +429,10 @@ app.whenReady().then(() => {
       },
       shelfWin: () => shelfWin, phoneWin: () => phoneWin, guideWin: () => guideWin, keyWin: () => keyWin,
       showShelf: () => { placeCard(80, 60); shelfWin.showInactive(); pushState(); },
-      openPhone, openGuide, openShortcutWindow, pushState, store: () => store
+      openPhone, openGuide, openShortcutWindow, pushState, store: () => store,
+      openDelivery, deliveryWin: () => deliveryWin, delivery: () => delivery,
+      imageSize: file => nativeImage.createFromPath(file).getSize(),
+      writeTestImage: (source, destination, width, height) => fs.writeFileSync(destination, nativeImage.createFromPath(source).resize({ width, height }).toPNG())
     };
   }
 });

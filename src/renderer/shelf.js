@@ -69,7 +69,7 @@ function render() {
   $('#empty .zone-ico').innerHTML = window.glyph('drop');
   $('#empty .zone-s').textContent = S.hooks === false
     ? Locale.t(S.platform === 'darwin' ? 'noHookMac' : 'noHook', { hotkey: S.settings.hotkeyLabel }) : Locale.t('emptyHint');
-  root.style.setProperty('--shelf-chrome-height', `${$('#top').offsetHeight + $('#foot').offsetHeight + 2}px`);
+  root.style.setProperty('--shelf-chrome-height', `${$('#top').offsetHeight + $('#foot').offsetHeight + $('#prepareBtn').offsetHeight + 12}px`);
   requestAnimationFrame(reportSize);
 }
 
@@ -82,6 +82,7 @@ new ResizeObserver(reportSize).observe($('#card'));
 
 // ───────────────────────────────────────────── clicks
 $('#closeBtn').onclick = () => window.shelf.send('win:hide');
+$('#prepareBtn').onclick = () => act('delivery');
 $('#phoneBtn').onclick = () => act('phone');
 $('#addTab').onclick = () => act('newShelf');
 $('#clearAll').onclick = () => act('clearShelf');

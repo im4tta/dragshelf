@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+- Added the shelf-and-delivery workspace: editable requirements, readiness checks and an exact output preview.
+- Prepare new copies with consistent filenames, PNG/JPEG conversion, image resizing, duplicate removal and per-file size limits.
+- Export a new folder or ZIP with instructions, an offline visual index and a SHA-256 manifest; originals remain unchanged.
+- Save reusable recipes and restore source references and settings from local delivery history.
+- Included English/Khmer translations, responsive layouts and source/packaged delivery integration checks.
+
 ## 1.2.0
 - Added English/Khmer language switching throughout the shared Windows/macOS interface, native menus, onboarding, dialogs, shortcut recorder and phone-transfer pages.
 - Bundled Noto Sans Khmer for offline rendering; localized dates, numbers, metadata labels and upload errors.

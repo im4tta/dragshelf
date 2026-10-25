@@ -1,0 +1,65 @@
+'use strict';
+const { _electron: electron } = require('playwright-core');
+const fs = require('fs'), os = require('os'), path = require('path'), assert = require('node:assert/strict');
+const I18N = require('../src/shared/i18n');
+const root = path.join(__dirname, '..'), temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ds-delivery-ui-'));
+const input = path.join(temp, 'input'), destination = path.join(temp, 'output'), ud = path.join(temp, 'userdata');
+for (const dir of [input, destination, ud]) fs.mkdirSync(dir);
+const logo = path.join(input, 'Logo final.png'), duplicate = path.join(input, 'Logo copy.png'), source = path.join(input, 'Source files.zip'), guide = path.join(input, 'Brand guide.pdf');
+fs.copyFileSync(path.join(root, 'build/icon.png'), logo); fs.copyFileSync(logo, duplicate); fs.writeFileSync(source, 'sample source archive'); fs.writeFileSync(guide, 'sample brand guide');
+const originals = [logo, duplicate, source, guide];
+fs.writeFileSync(path.join(ud, 'shelves.json'), JSON.stringify({ active: 0, shelves: [{ id: 'delivery-test-shelf', name: 'Brand handoff', items: originals.map(p => ({ p, added: Date.now(), done: false })) }] }));
+fs.writeFileSync(path.join(ud, 'settings.json'), JSON.stringify({ language: 'en', theme: 'dark', accent: 'yellow', guideDone: true, asked: true }));
+const capture = process.env.DRAGSHELF_DELIVERY_CAPTURE;
+const closeExpected = promise => promise.catch(error => { if (!/closed/.test(error.message)) throw error; });
+(async () => {
+  const app = await electron.launch({ ...(process.env.DRAGSHELF_TEST_EXE ? { executablePath: process.env.DRAGSHELF_TEST_EXE } : {}), args: [root, '--no-sandbox'], env: { ...process.env, DRAGSHELF_TEST: '1', DRAGSHELF_USER_DATA: ud, DRAGSHELF_TEST_EXPORT_DIR: destination } });
+  try {
+    const shelf = await app.firstWindow(); await shelf.waitForSelector('.row'); await app.evaluate(() => global.__test.showShelf());
+    await app.evaluate(({ app }, args) => global.__test.writeTestImage(...args), [logo, logo, 2400, 1600]); fs.copyFileSync(logo, duplicate);
+    const before = originals.map(file => fs.readFileSync(file));
+    const ready = app.waitForEvent('window'); await shelf.click('#prepareBtn'); const panel = await ready;
+    const errors = []; panel.on('pageerror', error => errors.push(error.message));
+    await panel.waitForSelector('.source-file'); assert.equal(await panel.locator('.source-file').count(), 4);
+    await panel.click('#primary'); await panel.waitForFunction(() => !document.querySelector('#primary').disabled);
+    assert((await panel.textContent('#status')).includes('Resolve required items'));
+    await panel.locator('[data-req="2"] summary').click(); await panel.locator('[data-req-required="2"]').uncheck();
+    await panel.locator('[data-req="2"] summary').click();
+    await panel.selectOption('#naming', 'slug'); await panel.selectOption('#resize', '1024');
+    await panel.locator('#advanced summary').click(); await panel.selectOption('#imageFormat', 'jpg'); await panel.check('#deduplicate');
+    await panel.fill('#notes', 'Final assets and editable source files. Please review before publication.');
+    await panel.locator('#advanced summary').click();
+    await panel.click('#primary'); await panel.waitForFunction(() => document.querySelector('#primary').textContent === 'Create delivery' && !document.querySelector('#primary').disabled);
+    assert((await panel.textContent('#outputPreview')).includes('logo-final.jpg'));
+    if (capture) { fs.mkdirSync(capture, { recursive: true }); await panel.locator('#workScroll').evaluate(el => { el.scrollTop = 0; }); await panel.screenshot({ path: path.join(capture, 'delivery-desktop.png') }); }
+    await panel.click('#saveRecipe'); await panel.fill('#recipeName', 'Client handoff'); await panel.locator('#recipeForm button').click();
+    await panel.click('#primary'); await panel.waitForFunction(() => !document.querySelector('#primary').disabled && !document.querySelector('#revealResult').hidden);
+    const exportedFolder = fs.readdirSync(destination).map(name => path.join(destination, name)).find(p => fs.statSync(p).isDirectory()); assert(exportedFolder);
+    const manifest = JSON.parse(fs.readFileSync(path.join(exportedFolder, 'delivery-manifest.json'), 'utf8')); assert.equal(manifest.files.length, 3);
+    const image = manifest.files.find(file => /\.jpg$/.test(file.output)); assert(image); assert.equal(image.width, 1024); assert.equal(image.height, 683);
+    const actualSize = await app.evaluate((_, file) => global.__test.imageSize(file), path.join(exportedFolder, ...image.output.split('/'))); assert.deepEqual(actualSize, { width: 1024, height: 683 });
+    originals.forEach((file, index) => assert.deepEqual(fs.readFileSync(file), before[index]));
+    assert(fs.existsSync(path.join(exportedFolder, 'index.html'))); assert(fs.existsSync(path.join(exportedFolder, 'README.txt')));
+    await panel.click('#historyButton'); await panel.locator('[data-history-action="restore"]').first().click();
+    await panel.waitForFunction(() => document.querySelector('#shelfName').textContent.includes('restored'));
+    const restored = await panel.evaluate(() => window.shelf.invoke('delivery:info')); assert.equal(restored.shelf.items.length, 4); assert(restored.recipes.some(recipe => recipe.name === 'Client handoff'));
+    await panel.selectOption('#format', 'zip'); await panel.click('#primary'); await panel.waitForFunction(() => document.querySelector('#primary').textContent === 'Create delivery' && !document.querySelector('#primary').disabled);
+    await panel.click('#primary'); await panel.waitForFunction(() => !document.querySelector('#primary').disabled && !document.querySelector('#revealResult').hidden);
+    const zip = fs.readdirSync(destination).find(name => name.endsWith('.zip')); assert(zip); assert.equal(fs.readFileSync(path.join(destination, zip)).readUInt32LE(0), 0x04034b50);
+    await panel.selectOption('[data-language-select]', 'km'); await panel.waitForFunction(() => document.documentElement.lang === 'km');
+    assert.equal(await panel.textContent('h1'), I18N.t('km', 'prepareDelivery'));
+    await panel.click('#primary'); await panel.waitForFunction(() => !document.querySelector('#primary').disabled && document.querySelector('#outputPreview .tree'));
+    if (capture) { await panel.locator('#workScroll').evaluate(el => { el.scrollTop = 0; }); await panel.screenshot({ path: path.join(capture, 'delivery-khmer.png') }); }
+    await app.evaluate(() => global.__test.deliveryWin().setSize(760, 640));
+    assert(await panel.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'compact layout has no horizontal page overflow');
+    await panel.locator('#primary').scrollIntoViewIfNeeded(); assert(await panel.locator('#primary').isVisible());
+    if (capture) await panel.screenshot({ path: path.join(capture, 'delivery-compact.png') });
+    assert.equal(errors.length, 0, errors.join('; '));
+    await panel.evaluate(() => window.shelf.invoke('act', 'setting', { key: 'theme', value: 'light' }));
+    await panel.waitForFunction(() => document.documentElement.dataset.scheme === 'light');
+    await panel.evaluate(() => window.shelf.invoke('act', 'setting', { key: 'accent', value: 'blue' }));
+    await panel.waitForFunction(() => document.documentElement.dataset.accent === 'blue');
+    await Promise.all([panel.waitForEvent('close'), closeExpected(panel.locator('[data-window="close"]').click())]);
+    console.log('PASS delivery UI: shelf entry, requirements, real image preparation, folder + ZIP exports, source preservation, recipe saving, history restoration, Khmer, compact layout, theme/accent');
+  } finally { await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
