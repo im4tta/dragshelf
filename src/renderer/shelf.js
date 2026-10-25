@@ -181,6 +181,7 @@ document.addEventListener('dragleave', e => { if (!e.relatedTarget) { setHot(fal
 
 document.addEventListener('drop', async e => {
   e.preventDefault();
+  const snapshot = selfDrag ? null : DropFiles.capture(e.dataTransfer);
   const at = insertAt; const tabEl = e.target.closest('[data-tab]'), plus = e.target.closest('#addTab');
   setHot(false); hideInsert();
   let target = S.active;
@@ -196,10 +197,8 @@ document.addEventListener('drop', async e => {
     return;
   }
 
-  // 2. everything else (read synchronously, the DataTransfer is only valid during the event)
-  const dt = e.dataTransfer, paths = [], blobs = [];
-  for (const f of dt.files) { const p = window.shelf.pathFor(f); if (p) paths.push(p); else blobs.push(f); }
-  const uriList = dt.getData('text/uri-list'), text = dt.getData('text/plain');
+  // 2. Recover explicit native file URLs before treating unresolved Files as blobs.
+  const { paths, blobs, uriList, text } = await DropFiles.resolve(snapshot);
   if (paths.length) { await act('add', { shelf: target, paths }); if (intoActive && at != null) await act('move', { from: target, paths, to: target, at }); if (tabEl && !plus) await act('setActive', { index: target }); }
   for (const f of blobs) { const buf = await f.arrayBuffer(); await window.shelf.invoke('drop:blob', target, f.name, buf); }
   if (!paths.length && !blobs.length) {

@@ -30,6 +30,8 @@ jobs:
         run: xvfb-run -a npm run test:khmer
       - name: Delivery workflow checks
         run: xvfb-run -a npm run test:delivery
+      - name: Filesystem drop recovery checks
+        run: xvfb-run -a npm run test:drop
 
   mac:
     needs: test
@@ -41,6 +43,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+
+      - name: macOS file drop recovery checks
+        run: npm run test:drop
 
       # Without an Apple Developer certificate the app is ad-hoc signed (works, but Gatekeeper asks once).
       - name: Build (ad-hoc signed)
@@ -94,6 +99,8 @@ jobs:
         run: npm run test:khmer
       - name: Delivery workflow checks
         run: npm run test:delivery
+      - name: Filesystem drop recovery checks
+        run: npm run test:drop
       - name: Build shared UI installer and portable executable
         run: npx electron-builder --win --x64 --publish never
       - name: Test packaged Windows application
@@ -105,6 +112,8 @@ jobs:
           npm run test:khmer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:delivery
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:drop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows UI screenshots
         run: npm run screenshots

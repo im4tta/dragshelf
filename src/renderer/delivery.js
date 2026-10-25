@@ -165,9 +165,12 @@ collection.addEventListener('dragover', event => { event.preventDefault(); if (!
 collection.addEventListener('dragleave', () => collection.classList.remove('drop-hot'));
 collection.addEventListener('drop', async event => {
   event.preventDefault(); collection.classList.remove('drop-hot'); if (busy || !data || !state) return;
-  const paths = [...event.dataTransfer.files].map(file => window.shelf.pathFor(file)).filter(Boolean);
+  const snapshot = DropFiles.capture(event.dataTransfer);
   const shelf = state.shelves.findIndex(item => item.id === data.shelf.id); if (shelf < 0) return;
+  const { paths, blobs } = await DropFiles.resolve(snapshot);
   await invoke('act', 'add', { shelf, paths }); await load(); dirty();
+  for (const file of blobs) await invoke('drop:blob', shelf, file.name, await file.arrayBuffer());
+  if (blobs.length) { await load(); dirty(); }
 });
 invoke('state:get').then(next => { state = next; applyAppearance(); });
 load();

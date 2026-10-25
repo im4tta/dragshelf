@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+- Recover original filesystem paths from explicit file URLs when Electron returns an empty path, before falling back to a blob copy.
+- Capture all drop metadata synchronously, including drops onto the new-shelf button. Share this handling with the delivery workspace.
+- Preserve browser blobs and mixed drops, decode Unicode/escaped file URLs and avoid duplicate stashed copies of resolved files.
+- Added regression coverage on Linux, Windows and macOS, plus packaged Windows checks.
+
 ## 1.3.0
 - Added the shelf-and-delivery workspace: editable requirements, readiness checks and an exact output preview.
 - Prepare new copies with consistent filenames, PNG/JPEG conversion, image resizing, duplicate removal and per-file size limits.

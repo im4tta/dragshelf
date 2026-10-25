@@ -1,7 +1,7 @@
 {
   "name": "dragshelf",
   "productName": "Drag Shelf",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "A temporary shelf for files, links, text and images. Shake while dragging and drop it on the shelf.",
   "main": "src/main/main.js",
   "license": "MIT",
@@ -26,7 +26,8 @@
     "start": "electron .",
     "test": "node scripts/selftest.js",
     "test:migration": "node --test scripts/windows-migration.test.js",
-    "test:unit": "node --test scripts/windows-migration.test.js scripts/phone.test.js scripts/i18n.test.js scripts/delivery.test.js",
+    "test:unit": "node --test scripts/windows-migration.test.js scripts/phone.test.js scripts/i18n.test.js scripts/delivery.test.js scripts/drop-files.test.js",
+    "test:drop": "node scripts/drop-test.js",
     "test:delivery": "node scripts/delivery-ui-test.js",
     "test:khmer": "node scripts/khmer-test.js",
     "test:display": "node scripts/display-test.js",

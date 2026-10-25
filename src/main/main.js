@@ -328,6 +328,10 @@ function openTabMenu(index) {
 }
 
 function wireIpc() {
+  ipcMain.handle('drop:resolve', (event, payload) => {
+    if (![shelfWin, deliveryWin].some(win => win && !win.isDestroyed() && event.sender === win.webContents)) return { paths: [], unresolved: [] };
+    return require('./drop-files').resolveDrop(payload);
+  });
   ipcMain.handle('state:get', () => buildState());
   ipcMain.handle('act', (e, type, p = {}) => {
     switch (type) {
