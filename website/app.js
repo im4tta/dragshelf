@@ -1,5 +1,20 @@
 'use strict';
 const repo = 'https://github.com/im4tta/dragshelf';
+const themeButton = document.createElement('button');
+themeButton.className = 'theme-switch';
+document.querySelector('.nav').insertBefore(themeButton, document.querySelector('.language-switch'));
+let theme; try { theme = localStorage.getItem('dragshelf-theme'); } catch (_) {}
+theme = theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  const km = document.documentElement.lang === 'km';
+  themeButton.textContent = theme === 'dark' ? '☀' : '☾';
+  themeButton.setAttribute('aria-label', theme === 'dark' ? (km ? 'ប្ដូរទៅរូបរាងភ្លឺ' : 'Switch to light mode') : (km ? 'ប្ដូរទៅរូបរាងងងឹត' : 'Switch to dark mode'));
+  themeButton.title = themeButton.getAttribute('aria-label');
+  try { localStorage.setItem('dragshelf-theme', theme); } catch (_) {}
+}
+themeButton.onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; applyTheme(); };
+addEventListener('landinglanguagechange', applyTheme); applyTheme();
 const platform = navigator.userAgentData?.platform || navigator.platform || '';
 const mac = /mac/i.test(platform), windows = /win/i.test(platform);
 const smart = document.querySelector('[data-smart-download]');
