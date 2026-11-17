@@ -1,6 +1,6 @@
 # Drag Shelf privacy policy
 
-Effective date: October 24, 2026
+Effective date: November 17, 2026
 
 Drag Shelf is an open-source desktop utility maintained by im4tta.
 
@@ -23,6 +23,8 @@ When you open "Photos from phone", Drag Shelf starts a temporary local-network H
 Drag Shelf does not require an account, include advertising or analytics, or upload your shelf contents to a developer-operated service. Microsoft Store and Windows may process installation, diagnostic, or other data under Microsoft's own privacy settings and policies.
 
 ## External links and support
+
+Starting with version 1.4, packaged desktop builds check the public GitHub releases API after startup and daily. GitHub receives your IP address and app version in the request header; shelf contents and file paths are not sent. Disable automatic checks in the tray/menu-bar menu. Manual checks still contact GitHub. Selecting Download update opens a GitHub download in your browser.
 
 Privacy and support menu items open GitHub in your browser. GitHub and your browser process those visits under their own policies. If you contact us or file a public issue, the information you choose to include is handled by the relevant email or GitHub service. Do not include private file contents in public issues.
 

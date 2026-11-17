@@ -17,6 +17,8 @@ Windows x64 · Apple Silicon · Intel · Universal &nbsp;|&nbsp; MIT licensed
 
 ## Download
 
+Version 1.4 and later checks GitHub for updates and offers the matching download. Use **Check for updates…** in the tray/menu-bar menu, or disable **Automatically check for updates** there. Install the downloaded file to finish updating. Versions 1.3.1 and earlier need one manual upgrade before receiving update prompts.
+
 Grab the build for your computer from the **[Releases](../../releases)** page.
 
 **Windows 10/11 (x64):** download `DragShelf-<version>-windows-x64-setup.exe` to install, or `DragShelf-<version>-windows-x64-portable.exe` to run without installation. Version 1.1 brings the same interface as macOS: rich file rows, completion ticks, confetti, eight accents, multiple shelves, phone transfers and the animated guide. The default shortcut is **Ctrl+Shift+F**. Existing shelves from the old native Windows app are imported once; the original data is retained.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0
+- Added automatic stable-release checks after startup and daily, plus a manual Check for updates menu action.
+- Update prompts offer the matching Windows installer/portable build or Mac download, with remind-later and skip-version choices.
+- Added background-check opt-out, localized dialogs, offline handling and trusted release URL validation.
+- Added a responsive landing page with direct latest-release downloads and a delivery showcase.
+
 ## 1.3.1
 - Recover original filesystem paths from explicit file URLs when Electron returns an empty path, before falling back to a blob copy.
 - Capture all drop metadata synchronously, including drops onto the new-shelf button. Share this handling with the delivery workspace.

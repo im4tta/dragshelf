@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const {
-  app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, nativeTheme, shell, systemPreferences, clipboard
+  app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, nativeTheme, shell, systemPreferences, clipboard, dialog, net
 } = require('electron');
 
 const { Store } = require('./store');
@@ -12,6 +12,7 @@ const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
 const I18N = require('../shared/i18n');
 const { Delivery } = require('./delivery');
+let updates;
 function language() { return I18N.resolveLanguage(store && store.settings.language, app.getLocale()); }
 function tr(key, values) { return I18N.t(language(), key, values); }
 function localizedMeta(meta) {
@@ -291,6 +292,8 @@ function buildTrayMenu() {
     { type: 'separator' },
     ...(IS_MAC ? [{ label: tr(hooksOn ? 'detectionOn' : 'enableDetection'), enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
     { label: tr('showGuide'), click: openGuide },
+    { label: tr('checkUpdates'), click: () => updates && updates.check(true) },
+    { label: tr('automaticUpdates'), type: 'checkbox', checked: st.updateChecks !== false, click: set('updateChecks', st.updateChecks === false) },
     { label: tr('privacy'), click: () => shell.openExternal(`https://github.com/im4tta/dragshelf/blob/main/PRIVACY${language() === 'km' ? '.km' : ''}.md`) },
     { label: tr('support'), click: () => shell.openExternal('https://github.com/im4tta/dragshelf/issues') },
     { label: tr('about'), click: () => app.showAboutPanel() },
@@ -395,6 +398,7 @@ function wireIpc() {
 app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
+  if (updates) updates.stop();
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
 });
@@ -419,7 +423,11 @@ app.whenReady().then(() => {
   deliveryJobs = require('./delivery-ipc')({ window: () => deliveryWin, shelfId: () => deliveryShelfId, setShelfId: value => { deliveryShelfId = value; }, store: () => store, service: () => delivery, state: buildState, language, t: tr, push: pushState, test: () => TEST });
   createShelfWindow();
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
-  if (!TEST) { createTray(); registerHotkey(store.settings.hotkey); startWatching(); }
+  if (!TEST) {
+    updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
+    createTray(); registerHotkey(store.settings.hotkey); startWatching();
+    if (app.isPackaged) updates.start();
+  }
   if (!TEST && !store.settings.guideDone) openGuide();
 
   if (TEST) {   // automated screenshots drive the app through these hooks

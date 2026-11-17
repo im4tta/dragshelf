@@ -5,6 +5,15 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const rows = [
+    ['checkUpdates', 'Check for updates…', 'ពិនិត្យរកកំណែថ្មី…'],
+    ['automaticUpdates', 'Automatically check for updates', 'ពិនិត្យរកកំណែថ្មីដោយស្វ័យប្រវត្តិ'],
+    ['updatesCurrent', 'Drag Shelf is up to date', 'Drag Shelf ជាកំណែថ្មីបំផុត'],
+    ['updateAvailable', 'A new Drag Shelf is available', 'មានកំណែថ្មីរបស់ Drag Shelf'],
+    ['updateDetail', 'Version {version} is ready. Download it and install it to update. Your shelves are kept.', 'កំណែ {version} រួចរាល់ហើយ។ ទាញយក និងដំឡើងដើម្បីធ្វើបច្ចុប្បន្នភាព។ ធ្នើរបស់អ្នកត្រូវបានរក្សាទុក។'],
+    ['downloadUpdate', 'Download update', 'ទាញយកកំណែថ្មី'],
+    ['laterUpdate', 'Remind me later', 'រំលឹកខ្ញុំពេលក្រោយ'],
+    ['skipUpdate', 'Skip this version', 'រំលងកំណែនេះ'],
+    ['updateFailed', 'Could not check for updates. Please try again later.', 'មិនអាចពិនិត្យរកកំណែថ្មីបានទេ។ សូមព្យាយាមម្ដងទៀតពេលក្រោយ។'],
     ['showShelf', 'Show shelf', 'បង្ហាញធ្នើ'],
     ['hideShelf', 'Hide shelf', 'លាក់ធ្នើ'],
     ['newShelf', 'New shelf', 'ធ្នើថ្មី'],

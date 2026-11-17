@@ -97,8 +97,9 @@ const httpReq = (url, opt = {}, body) => new Promise((res, rej) => { const r = h
   }
 
   console.log('shortcut recorder');
-  await app.evaluate(() => global.__test.openShortcutWindow()); await sleep(900);
-  const kw = app.windows().find(w => w.url().includes('shortcut.html')); ok(!!kw, 'shortcut window opens');
+  const shortcutOpened = app.waitForEvent('window');
+  await app.evaluate(() => global.__test.openShortcutWindow());
+  const kw = await shortcutOpened; await kw.waitForURL('**/shortcut.html*'); await kw.waitForLoadState('domcontentloaded'); ok(true, 'shortcut window opens');
   if (kw) {
     await kw.keyboard.down('Alt'); await kw.keyboard.down('Shift'); await kw.keyboard.press('KeyK'); await sleep(500);
     ok((await st()).settings.hotkey === 'Alt+Shift+K', 'new shortcut is saved as Alt+Shift+K');
