@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
 - **Auto-paste:** turn on *Auto-paste copied items* (tray/menu-bar menu or the History panel) and whatever you copy lands on the active shelf, even while the shelf is hidden: files of any type copied in Finder/Explorer (by reference), images, links and text. *Paste clipboard to shelf* and ⌘/Ctrl+V do it once.
 - **Screen capture:** the camera button in the shelf header (or the menu) adds a screenshot of the current display at 1×–4× resolution (*Screenshot resolution*).
 - **History:** the clock button opens everything that ever landed on a shelf, with search, copy back to the clipboard and add to the shelf again. Right-click removes an entry.
