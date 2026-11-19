@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const translations = {
-    'How it works':'របៀបប្រើប្រាស់','Delivery workspace':'កន្លែងរៀបចំការប្រគល់','Get Drag Shelf':'ទាញយក Drag Shelf',
+    'How it works':'របៀបប្រើប្រាស់','Delivery workspace':'កន្លែងរៀបចំការប្រគល់','Tuk scratchpad':'កន្លែងទុក Tuk','Get Drag Shelf':'ទាញយក Drag Shelf',
     'A small tool for the work in between.':'ឧបករណ៍តូចមួយ សម្រាប់ការងារប្រចាំថ្ងៃ។',
     'A little shelf.':'ធ្នើតូចមួយ។','A lot less':'កាត់បន្ថយ','juggling.':'ភាពរញ៉េរញ៉ៃ។',
     'Files here. Links there. One more thing to send.':'ឯកសារនៅទីនេះ។ តំណនៅទីនោះ។ នៅសល់រឿងមួយទៀតត្រូវផ្ញើ។',

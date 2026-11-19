@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- Added **Tuk (ទុក)**, a local-first screenshot and clipboard scratchpad on the website (`website/tuk/`). Everything is kept in the browser's IndexedDB; nothing is uploaded.
+  - Paste screenshots and any file type (type recognised by MIME and extension), drop files, or capture the screen at 1×–4× resolution.
+  - Auto-paste reads the clipboard (images, HTML, text and other types) whenever the tab regains focus.
+  - History of every item, pinning, captions, search, type filter, copy-back, and ZIP export with a captions index.
+  - Split / Merge text tool with custom separators (`\n`, `\t`, regex), trim/unique/wrap options, sort/reverse and undo/redo.
+  - Dark theme by default with a light toggle.
+
 ## 1.4.0
 - Added automatic stable-release checks after startup and daily, plus a manual Check for updates menu action.
 - Update prompts offer the matching Windows installer/portable build or Mac download, with remind-later and skip-version choices.

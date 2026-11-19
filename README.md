@@ -64,6 +64,8 @@ To notice that you are *dragging something and shaking the mouse*, Drag Shelf ne
 
 **Prepare a delivery (1.3):** open a shelf in a companion workspace, check editable requirements, prepare consistently named copies and preview the result. Export a new folder or ZIP with instructions, an offline visual index and a file manifest. Save recipes and restore source references from local delivery history. PNG/JPEG resizing and conversion happen locally; originals stay unchanged. [Delivery guide](docs/DELIVERY.md)
 
+**Tuk (ទុក) — paste, capture, keep:** a local-first screenshot and clipboard scratchpad that runs in your browser at [`website/tuk/`](website/tuk/) (published with the landing page). No sign-up, server or upload: items live in IndexedDB on your device. Paste or drop any file type, capture the screen at up to 4×, turn on **Auto-paste** to collect the clipboard whenever you return to the tab, pin and caption items, search the history, split/merge text with undo/redo, and export a ZIP.
+
 **English + ភាសាខ្មែរ:** switch instantly using the tray/menu-bar **Language / ភាសា** menu or the language selector in the welcome guide. Khmer includes an offline font, localized dates and numbers, menus, onboarding, phone uploads and errors. Existing filenames and shelf names are preserved. Long shelf names wrap rather than being shortened with an ellipsis. [ការណែនាំជាភាសាខ្មែរ](docs/KHMER.md)
 
 | | |

@@ -26,7 +26,7 @@
     "start": "electron .",
     "test": "node scripts/selftest.js",
     "test:migration": "node --test scripts/windows-migration.test.js",
-    "test:unit": "node --test scripts/windows-migration.test.js scripts/phone.test.js scripts/i18n.test.js scripts/delivery.test.js scripts/drop-files.test.js scripts/updates.test.js",
+    "test:unit": "node --test scripts/windows-migration.test.js scripts/phone.test.js scripts/i18n.test.js scripts/delivery.test.js scripts/drop-files.test.js scripts/updates.test.js scripts/tuk.test.js",
     "test:drop": "node scripts/drop-test.js",
     "test:delivery": "node scripts/delivery-ui-test.js",
     "test:khmer": "node scripts/khmer-test.js",

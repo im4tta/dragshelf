@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tuk ទុក — paste, capture, keep</title>
+<meta name="description" content="A fast, local-first screenshot and clipboard scratchpad. No sign-up, no server, no upload. Everything stays in your browser.">
+<meta name="theme-color" content="#1c1d1a"><link rel="icon" href="../assets/icon.png"><link rel="stylesheet" href="tuk.css"></head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><span class="mark" lang="km">ទុក</span><span><b>Tuk</b><small>paste · capture · keep</small></span></a>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" data-view="shots" aria-selected="true">Shots <span class="count" id="count-shots">0</span></button>
+    <button role="tab" data-view="history">History <span class="count" id="count-history">0</span></button>
+    <button role="tab" data-view="pinned">Pinned <span class="count" id="count-pinned">0</span></button>
+    <button role="tab" data-view="text">Split / Merge</button>
+  </nav>
+  <div class="top-actions">
+    <label class="switch" title="Read the clipboard automatically whenever you return to this tab"><input type="checkbox" id="auto-paste"><span></span>Auto-paste</label>
+    <button class="icon" id="theme" aria-label="Toggle light / dark theme">◐</button>
+  </div>
+</header>
+
+<main>
+  <section class="toolbar" id="list-toolbar">
+    <input type="search" id="search" placeholder="Search captions, text, file names…  ( / )" aria-label="Search">
+    <select id="kind-filter" aria-label="Filter by type"><option value="">All types</option><option>image</option><option>text</option><option>link</option><option>html</option><option>code</option><option>pdf</option><option>document</option><option>video</option><option>audio</option><option>archive</option><option>file</option></select>
+    <div class="capture">
+      <select id="scale" aria-label="Capture resolution"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select>
+      <button class="primary" id="capture">Capture screen</button>
+    </div>
+    <button id="paste-now" title="Read clipboard now (or press Ctrl/⌘+V anywhere)">Paste</button>
+    <label class="button" title="Add files">Add files<input type="file" id="file-input" multiple hidden></label>
+    <button id="select-all">Select all</button>
+    <button id="export">Export ZIP</button>
+    <button class="danger" id="delete-selected" disabled>Delete</button>
+  </section>
+
+  <section id="grid" class="grid" aria-live="polite"></section>
+  <div id="empty" class="empty" hidden>
+    <div class="drop-art">⌘V</div>
+    <h2>Paste anything to keep it.</h2>
+    <p>Screenshots, images, text, links or any file. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd>, drop files here, or capture your screen.<br>Stored only on this device in IndexedDB — nothing is uploaded.</p>
+  </div>
+
+  <section id="text-view" class="text-view" hidden>
+    <div class="text-controls">
+      <div class="group"><label>Separator <input id="sep" value=","></label>
+        <div class="chips" id="sep-chips"><button data-sep=",">,</button><button data-sep=", ">, ␠</button><button data-sep="\n">↵</button><button data-sep="\t">⇥</button><button data-sep=" ">␠</button><button data-sep=";">;</button><button data-sep="|">|</button></div></div>
+      <div class="group opts">
+        <label><input type="checkbox" id="opt-trim" checked> Trim</label>
+        <label><input type="checkbox" id="opt-empty" checked> Skip empty</label>
+        <label><input type="checkbox" id="opt-unique"> Unique</label>
+        <label><input type="checkbox" id="opt-regex"> Regex (split)</label>
+        <label>Wrap <input id="opt-wrap" class="tiny" placeholder="&quot;"></label>
+      </div>
+      <div class="group buttons">
+        <button class="primary" id="do-split">Split → lines</button>
+        <button class="primary" id="do-merge">Merge lines →</button>
+        <button id="do-sort">Sort</button><button id="do-reverse">Reverse</button>
+        <button id="undo" title="Ctrl/⌘+Z">↶ Undo</button><button id="redo" title="Ctrl/⌘+Shift+Z">↷ Redo</button>
+        <button id="text-copy">Copy</button><button id="text-keep">Keep</button>
+      </div>
+    </div>
+    <textarea id="text" spellcheck="false" placeholder="Paste or type text here, then split by a separator or merge lines."></textarea>
+    <p class="stats" id="text-stats"></p>
+  </section>
+</main>
+
+<dialog id="viewer"><form method="dialog"><img id="viewer-img" alt=""><button class="icon close" aria-label="Close">✕</button></form></dialog>
+<div id="dropzone" class="dropzone" hidden>Drop to keep</div>
+<div id="toast" class="toast" role="status"></div>
+<script src="core.js"></script><script src="app.js"></script>
+</body></html>
