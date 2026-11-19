@@ -64,6 +64,8 @@ To notice that you are *dragging something and shaking the mouse*, Drag Shelf ne
 
 **Prepare a delivery (1.3):** open a shelf in a companion workspace, check editable requirements, prepare consistently named copies and preview the result. Export a new folder or ZIP with instructions, an offline visual index and a file manifest. Save recipes and restore source references from local delivery history. PNG/JPEG resizing and conversion happen locally; originals stay unchanged. [Delivery guide](docs/DELIVERY.md)
 
+**Clipboard & capture tools:** *Auto-paste copied items* puts everything you copy (files of any type, images, links, text) on the active shelf. The camera button captures the screen at up to 4×. The clock button opens the **History** of everything you have added, with search, pins, copy and re-add. Right-click a text item for **Split / merge text…**. Undo and redo any shelf change with the footer arrows or ⌘/Ctrl+Z.
+
 **English + ភាសាខ្មែរ:** switch instantly using the tray/menu-bar **Language / ភាសា** menu or the language selector in the welcome guide. Khmer includes an offline font, localized dates and numbers, menus, onboarding, phone uploads and errors. Existing filenames and shelf names are preserved. Long shelf names wrap rather than being shortened with an ellipsis. [ការណែនាំជាភាសាខ្មែរ](docs/KHMER.md)
 
 | | |

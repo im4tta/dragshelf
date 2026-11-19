@@ -14,6 +14,10 @@ The Windows app stores its data under your Windows user profile. The packaged Mi
 
 The Windows app observes mouse movement and button state to detect a drag-and-shake gesture. It registers a global shortcut and reads shortcut keys while you configure that shortcut. It uses the active app's executable name for app exclusions. It does not record your typing history or send these interactions to the developer.
 
+## Clipboard, screenshots and history
+
+When *Auto-paste copied items* is on (it is off by default), Drag Shelf reads the system clipboard about once a second and adds each new copy to the active shelf: copied files are referenced in place, and images, links and text are saved as local files. *Paste clipboard to shelf* reads the clipboard once. Screen captures happen only when you press the capture button; macOS asks for Screen Recording permission. A history of items added to shelves is stored locally in `history.json`; remove entries or clear it from the History panel. Nothing is uploaded.
+
 ## Optional phone transfers
 
 When you open "Photos from phone", Drag Shelf starts a temporary local-network HTTP server with a random secret URL. A phone using that URL can upload files directly to your computer. The app processes the network connection's IP address to restrict connections to private/local addresses; it does not send it to the developer or use it for analytics. Files are stored locally. Closing the transfer window stops accepting transfers. Transfers use HTTP, so use this feature only on a trusted private network and keep its URL private.

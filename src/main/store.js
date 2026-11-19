@@ -12,6 +12,8 @@ const DEFAULT_SETTINGS = {
   strict: true,             // only pop up when a real file drag is in progress
   moveOnDragOut: true,      // items leave the shelf once dropped somewhere else (hold ⌥ to copy)
   guideDone: false,
+  autoPaste: false,         // new clipboard contents land on the active shelf
+  captureScale: 2,          // screenshot resolution multiple (1–4×)
   asked: false              // already asked for the Accessibility permission once
 };
 
@@ -20,6 +22,9 @@ class Store {
     this.dir = dir;
     this.file = path.join(dir, 'shelves.json');
     this.settingsFile = path.join(dir, 'settings.json');
+    this.historyFile = path.join(dir, 'history.json');
+    this.history = [];          // everything that ever landed on a shelf, newest first: { p, added, pinned }
+    this.undoStack = []; this.redoStack = [];
     this.shelves = [];
     this.defaultShelfName = defaultShelfName;
     this.active = 0;
@@ -42,6 +47,7 @@ class Store {
     } catch (_) { /* first run */ }
     if (!this.shelves.length) this.shelves = [{ id: randomUUID(), name: this.defaultShelfName, delivery: null, items: [] }];
     try { Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, 'utf8'))); } catch (_) { /* defaults */ }
+    try { this.history = (JSON.parse(fs.readFileSync(this.historyFile, 'utf8')).items || []).filter(h => h && typeof h.p === 'string').map(h => ({ p: h.p, added: h.added || Date.now(), pinned: !!h.pinned })); } catch (_) { /* no history yet */ }
   }
 
   _write(file, data) {
@@ -58,6 +64,7 @@ class Store {
     try {
       this._write(this.file, { version: 1, active: this.active, shelves: this.shelves });
       this._write(this.settingsFile, this.settings);
+      this._write(this.historyFile, { version: 1, items: this.history });
     } catch (e) { console.error('save failed', e); }
   }
 
@@ -72,6 +79,7 @@ class Store {
     for (const p of paths) {
       if (!p || s.items.some(i => i.p === p)) continue;
       s.items.push({ p, done: false, added: Date.now() }); n++;
+      this.remember(p);
     }
     if (n) this.save();
     return n;
@@ -104,6 +112,45 @@ class Store {
     if (name && this.shelves[i]) { this.shelves[i].name = name; this.save(); }
   }
   setActive(i) { if (this.shelves[i]) { this.active = i; this.save(); } }
+  // ── history: every item added to a shelf, newest first. Pinned entries stay on top and are never pruned.
+  remember(p) {
+    const old = this.history.find(h => h.p === p);
+    this.history = this.history.filter(h => h.p !== p);
+    this.history.unshift({ p, added: Date.now(), pinned: !!(old && old.pinned) });
+    this.pruneHistory(); this.save();
+  }
+  pruneHistory(limit = Store.HISTORY_LIMIT) {
+    let unpinned = 0;
+    this.history = this.history.filter(h => h.pinned || ++unpinned <= limit);
+  }
+  historyView() { return [...this.history.filter(h => h.pinned), ...this.history.filter(h => !h.pinned)]; }
+  togglePin(p) { const h = this.history.find(x => x.p === p); if (h) { h.pinned = !h.pinned; this.save(); } return !!(h && h.pinned); }
+  forget(paths) { const set = new Set(paths); this.history = this.history.filter(h => !set.has(h.p)); this.save(); }
+  clearHistory() { this.history = this.history.filter(h => h.pinned); this.save(); }
+
+  // ── undo / redo for shelf changes. checkpoint() is called before every change that should be undoable.
+  _snap() { return JSON.stringify({ active: this.active, shelves: this.shelves }); }
+  _restore(snap) { const j = JSON.parse(snap); this.shelves = j.shelves; this.active = Math.min(j.active, this.shelves.length - 1); this.save(); }
+  checkpoint() {
+    const snap = this._snap();
+    if (this.undoStack[this.undoStack.length - 1] === snap) return;
+    this.undoStack.push(snap); if (this.undoStack.length > Store.UNDO_LIMIT) this.undoStack.shift();
+    this.redoStack = [];
+  }
+  // Drops the last checkpoint when the change it guarded turned out to be a no-op.
+  settle() { if (this.undoStack[this.undoStack.length - 1] === this._snap()) this.undoStack.pop(); }
+  undo() { if (!this.undoStack.length) return false; this.redoStack.push(this._snap()); this._restore(this.undoStack.pop()); return true; }
+  redo() { if (!this.redoStack.length) return false; this.undoStack.push(this._snap()); this._restore(this.redoStack.pop()); return true; }
+  get canUndo() { return this.undoStack.length > 0; }
+  get canRedo() { return this.redoStack.length > 0; }
+
+  // Replace the item at `index` with `paths` (used when a text item is split into several items).
+  replaceItem(shelf, index, paths) {
+    const s = this.shelves[shelf]; if (!s || !s.items[index]) return;
+    const fresh = paths.filter(p => !s.items.some(i => i.p === p)).map(p => ({ p, done: false, added: Date.now() }));
+    s.items.splice(index, 1, ...fresh); fresh.forEach(i => this.remember(i.p)); this.save();
+  }
+
   // move the items at `paths` (from shelf `from`) so that they sit before position `to` of shelf `toShelf`
   moveItems(from, paths, toShelf, to) {
     const src = this.shelves[from], dst = this.shelves[toShelf]; if (!src || !dst) return;
@@ -124,5 +171,8 @@ class Store {
     this.save();
   }
 }
+
+Store.HISTORY_LIMIT = 300;
+Store.UNDO_LIMIT = 50;
 
 module.exports = { Store, DEFAULT_SETTINGS };

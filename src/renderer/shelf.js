@@ -9,6 +9,7 @@ let hoverTab = -1, hoverTick = 0;
 let insertAt = null;          // list position under the pointer while dragging
 let justDone = null;          // path that was just ticked (animation)
 let renaming = false;
+let panel = null;              // 'history' | 'text' while a panel replaces the list
 
 // ───────────────────────────────────────────── state & render
 window.shelf.on('state', s => { S = s; render(); });
@@ -34,6 +35,12 @@ function render() {
   $('#counter').textContent = `${Locale.number(done)}/${Locale.number(items.length)}`;
   $('#phoneBtn').innerHTML = window.glyph('phone'); $('#phoneBtn').classList.toggle('live', S.phone);
   $('#closeBtn').innerHTML = window.glyph('close');
+  $('#captureBtn').innerHTML = window.glyph('camera'); $('#historyBtn').innerHTML = window.glyph('history');
+  $('#historyBtn').classList.toggle('live', !!S.settings.autoPaste);
+  $('#undoBtn').innerHTML = window.glyph('undo'); $('#redoBtn').innerHTML = window.glyph('redo');
+  $('#undoBtn').disabled = !S.canUndo; $('#redoBtn').disabled = !S.canRedo;
+  $('#autoPaste').checked = !!S.settings.autoPaste;
+  if (panel === 'history') loadHistory();
 
   if (!renaming) {
     const tabs = $('#tabs'); tabs.innerHTML = '';
@@ -63,12 +70,14 @@ function render() {
   const n = items.length, card = $('#card');
   card.classList.toggle('has-items', n > 0);
   $('#empty').style.display = n ? 'none' : 'block';
-  $('#foot').style.display = n >= 2 ? 'flex' : 'none';
+  $('#foot').style.display = n >= 2 || S.canUndo || S.canRedo ? 'flex' : 'none';
+  $('#dragAll').style.display = n >= 2 ? '' : 'none';
   $('#clearDone').style.display = done > 0 ? 'inline-block' : 'none';
   $('#dragAll').innerHTML = `${window.glyph('stack')}${Locale.t('dragAll', { n: Locale.number(n) })}`;
   $('#empty .zone-ico').innerHTML = window.glyph('drop');
   $('#empty .zone-s').textContent = S.hooks === false
     ? Locale.t(S.platform === 'darwin' ? 'noHookMac' : 'noHook', { hotkey: S.settings.hotkeyLabel }) : Locale.t('emptyHint');
+  card.classList.toggle('panel-open', !!panel);
   root.style.setProperty('--shelf-chrome-height', `${$('#top').offsetHeight + $('#foot').offsetHeight + $('#prepareBtn').offsetHeight + 12}px`);
   requestAnimationFrame(reportSize);
 }
@@ -220,9 +229,120 @@ function burst(cx, cy) {
   }
 }
 
+// ───────────────────────────────────────────── toast
+let toastTimer = null;
+function toast(message) {
+  const el = $('#toast'); el.textContent = message; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ───────────────────────────────────────────── capture, paste, undo / redo
+$('#captureBtn').onclick = async () => {
+  const shot = await act('capture');
+  if (shot && shot.error) toast(shot.error); else if (shot) toast(Locale.t('captured', { size: `${Locale.number(shot.width)}×${Locale.number(shot.height)}` }));
+};
+$('#undoBtn').onclick = () => act('undo');
+$('#redoBtn').onclick = () => act('redo');
+async function pasteClipboard() { const n = await act('paste'); toast(n ? Locale.t('pasted', { n: Locale.number(n) }) : Locale.t('clipboardEmpty')); }
+$('#pasteBtn').onclick = pasteClipboard;
+document.addEventListener('keydown', e => {
+  if (e.isComposing || !(e.ctrlKey || e.metaKey)) return;
+  const key = e.key.toLowerCase(), typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  if (panel === 'text' && document.activeElement === $('#textBody') && (key === 'z' || key === 'y')) { e.preventDefault(); (key === 'y' || e.shiftKey ? textRedo : textUndo)(); return; }
+  if (typing) return;
+  if (key === 'z') { e.preventDefault(); act(e.shiftKey ? 'redo' : 'undo'); }
+  else if (key === 'y') { e.preventDefault(); act('redo'); }
+  else if (key === 'v') { e.preventDefault(); pasteClipboard(); }
+});
+
+// ───────────────────────────────────────────── panels (history, text tools) replace the list while open
+function openPanel(name) {
+  panel = name;
+  $('#history').hidden = name !== 'history'; $('#textTools').hidden = name !== 'text';
+  window.shelf.send('focusable', !!name);    // inputs need keyboard focus; the shelf is normally not focusable
+  render();
+}
+document.querySelectorAll('.panel [data-close]').forEach(b => { b.innerHTML = window.glyph('back'); b.onclick = () => openPanel(null); });
+$('#pasteBtn').innerHTML = window.glyph('paste');
+$('#historyBtn').onclick = () => openPanel(panel === 'history' ? null : 'history');
+
+// History: everything that ever landed on a shelf (including auto-pasted copies). Pinned entries stay on top.
+let historyItems = [];
+async function loadHistory() { historyItems = await window.shelf.invoke('history:get'); renderHistory(); }
+function renderHistory() {
+  const q = $('#historySearch').value.trim().toLowerCase();
+  const items = historyItems.filter(h => !q || (h.name + ' ' + h.preview).toLowerCase().includes(q));
+  const list = $('#historyList'); list.innerHTML = '';
+  let pinnedHeader = false, recentHeader = false;
+  for (const h of items) {
+    if (h.pinned && !pinnedHeader) { pinnedHeader = true; list.insertAdjacentHTML('beforeend', `<li class="h-label">${esc(Locale.t('pinned'))}</li>`); }
+    if (!h.pinned && pinnedHeader && !recentHeader) { recentHeader = true; list.insertAdjacentHTML('beforeend', `<li class="h-label">${esc(Locale.t('history'))}</li>`); }
+    const li = document.createElement('li'); li.className = 'h-row' + (h.exists ? '' : ' missing') + (h.pinned ? ' pinned' : ''); li.dataset.path = h.path; li.title = h.path;
+    li.innerHTML = `<div class="tile">${window.glyph(h.kind)}</div>
+      <div class="meta"><div class="name">${esc(h.preview || h.name)}</div><div class="sub">${esc([h.preview ? h.name : '', when(h.added)].filter(Boolean).join(' · '))}</div></div>
+      <div class="h-actions">
+        <button class="icon${h.pinned ? ' live' : ''}" data-h="pin" title="${esc(Locale.t(h.pinned ? 'unpin' : 'pin'))}" aria-pressed="${h.pinned}">${window.glyph('pin')}</button>
+        <button class="icon" data-h="copy" title="${esc(Locale.t('copyItem'))}" ${h.exists ? '' : 'disabled'}>${window.glyph('copy')}</button>
+        <button class="icon" data-h="add" title="${esc(Locale.t('addToShelf'))}" ${h.exists && !h.onShelf ? '' : 'disabled'}>${window.glyph('plus')}</button>
+      </div>`;
+    list.appendChild(li);
+  }
+  $('#historyEmpty').hidden = items.length > 0;
+  requestAnimationFrame(reportSize);
+}
+$('#historySearch').addEventListener('input', renderHistory);
+$('#historyList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-h]'), row = e.target.closest('.h-row'); if (!b || !row) return;
+  const path = row.dataset.path;
+  if (b.dataset.h === 'pin') { await act('pinHistory', { path }); loadHistory(); }
+  else if (b.dataset.h === 'copy') { await act('copy', { path }); toast(Locale.t('copied')); }
+  else if (b.dataset.h === 'add') await act('addFromHistory', { path });
+});
+$('#historyList').addEventListener('contextmenu', async e => {
+  const row = e.target.closest('.h-row'); if (!row) return; e.preventDefault();
+  await act('forget', { path: row.dataset.path }); loadHistory();
+});
+$('#clearHistory').onclick = async () => { await act('clearHistory'); loadHistory(); };
+$('#autoPaste').onchange = e => act('autoPaste', { value: e.target.checked });
+
+// Split / merge text: edit one text item, split or merge its lines (with undo / redo), split it into several
+// shelf items, or merge every text item on the shelf into one.
+let textIndex = -1, textHistory = { undo: [], redo: [] }, typingMark = null;
+const body = $('#textBody');
+async function openText(index) {
+  const doc = await act('readText', { index }); if (!doc) return;
+  textIndex = index; textHistory = { undo: [], redo: [] };
+  $('#textName').textContent = cur().items[index].name; body.value = doc.text;
+  $('#textUndo').innerHTML = window.glyph('undo'); $('#textRedo').innerHTML = window.glyph('redo');
+  updateTextButtons(); openPanel('text'); setTimeout(() => body.focus(), 60);
+}
+window.shelf.on('text:open', openText);
+function updateTextButtons() { $('#textUndo').disabled = !textHistory.undo.length; $('#textRedo').disabled = !textHistory.redo.length; }
+function recordText() { if (textHistory.undo[textHistory.undo.length - 1] !== body.value) textHistory.undo.push(body.value); textHistory.redo = []; updateTextButtons(); }
+function setText(value) { if (value === body.value) return; recordText(); body.value = value; updateTextButtons(); }
+function textUndo() { if (!textHistory.undo.length) return; textHistory.redo.push(body.value); body.value = textHistory.undo.pop(); typingMark = null; updateTextButtons(); }
+function textRedo() { if (!textHistory.redo.length) return; textHistory.undo.push(body.value); body.value = textHistory.redo.pop(); typingMark = null; updateTextButtons(); }
+body.addEventListener('beforeinput', () => { if (typingMark === null) recordText(); clearTimeout(typingMark); typingMark = setTimeout(() => { typingMark = null; }, 700); });
+const textOpts = () => ({ trim: $('#optTrim').checked, unique: $('#optUnique').checked });
+$('#textTools .chips').addEventListener('click', e => { const b = e.target.closest('[data-sep]'); if (b) $('#sep').value = b.dataset.sep; });
+$('#doSplit').onclick = () => setText(TextOps.split(body.value, $('#sep').value, textOpts()));
+$('#doMerge').onclick = () => setText(TextOps.merge(body.value, $('#sep').value, textOpts()));
+$('#textUndo').onclick = textUndo; $('#textRedo').onclick = textRedo;
+$('#saveText').onclick = async () => { await act('saveText', { index: textIndex, text: body.value }); toast(Locale.t('saveText') + ' ✓'); };
+$('#splitItems').onclick = async () => {
+  await act('saveText', { index: textIndex, text: body.value });
+  const n = await act('split', { index: textIndex, separator: $('#sep').value, opts: textOpts() });
+  if (n > 1) { toast(Locale.t('splitDone', { n: Locale.number(n) })); openPanel(null); }
+};
+$('#mergeItems').onclick = async () => {
+  await act('saveText', { index: textIndex, text: body.value });
+  const n = await act('merge', { separator: $('#sep').value, opts: textOpts() });
+  if (n > 1) { toast(Locale.t('mergeDone', { n: Locale.number(n) })); openPanel(null); }
+};
+
 // helpers for automated screenshots (only when launched in test mode)
 if (TEST) window.__t = {
   hot: on => setHot(on), lift: i => document.querySelectorAll('.row')[i].classList.add('lifted'),
   insert: i => showInsert(i), burstAt: i => { const c = document.querySelectorAll('.check')[i].getBoundingClientRect(); burst(c.left + c.width / 2, c.top + c.height / 2); },
-  reorder: () => { selfDrag = { shelf: 0, paths: [] }; setHot(true); }, rename: i => beginRename(i), state: () => S
+  reorder: () => { selfDrag = { shelf: 0, paths: [] }; setHot(true); }, rename: i => beginRename(i), state: () => S, openText, openPanel
 };
