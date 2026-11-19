@@ -90,14 +90,14 @@ async function buildState() {
   const shelves = await Promise.all(store.shelves.map(async s => ({
     id: s.id,
     name: s.name,
-    items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added, editable: isTextFile(it.p) })))
+    items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added, editable: isTextFile(it.p), text: textInfo(it.p), ocr: !!store.ocrOf(it.p) })))
   })));
   const st = store.settings;
   return {
     viewport: { maxCardHeight: workAreaAt(shelfWin ? { x: shelfWin.getBounds().x + PAD, y: shelfWin.getBounds().y + PAD } : undefined).height - 2 * PAD - 12 },
     shelves, active: store.active, platform: process.platform, language: language(),
-    settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut, autoPaste: !!st.autoPaste, captureScale: st.captureScale },
-    canUndo: store.canUndo, canRedo: store.canRedo,
+    settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut, autoPaste: !!st.autoPaste, captureScale: st.captureScale, ocrAuto: st.ocrAuto !== false, ocrMode: st.ocrMode, quickPasteLabel: accelLabel(st.quickPasteKey) },
+    canUndo: store.canUndo, canRedo: store.canRedo, ocrReady: ocrReady(), rules: store.rules, hasDelivery: !!(delivery && delivery.data.history.length),
     phone: !!(phone && phone.running), hooks: hooksOn
   };
 }
@@ -142,10 +142,11 @@ function addClipboard(snap) {
   else if (/^https?:\/\/\S+$/i.test(snap.text.trim())) paths = [stash.saveUrl(snap.text.trim())];
   else if (snap.text.trim()) paths = [stash.saveText(snap.text)];
   if (!paths.length) return 0;
-  store.checkpoint(); const n = store.addPaths(store.active, paths); store.settle(); pushState();
+  store.checkpoint(); const n = store.addRouted(paths).added; store.settle(); pushState();
+  if (snap.kind === 'image') paths.forEach(autoOcr);
   return n;
 }
-function ensureClipWatch() { if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onCopy: addClipboard }); return clipWatch; }
+function ensureClipWatch() { if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onCopy: addClipboard, options: () => ({ skipConcealed: store.settings.skipConcealed !== false }) }); return clipWatch; }
 function setAutoPaste(on) {
   store.setSetting('autoPaste', !!on);
   if (on) ensureClipWatch().start(); else if (clipWatch) clipWatch.stop();
@@ -157,7 +158,7 @@ async function copyOut(write) { await write(); if (clipWatch) await clipWatch.re
 async function copyItem(p) {
   const { ClipboardItem } = require('electron');
   const kind = EXT_TO_KIND[path.extname(p).slice(1).toLowerCase()];
-  if (isTextFile(p)) return copyOut(() => clipboard.writeText(fs.readFileSync(p, 'utf8')));
+  if (isTextFile(p)) { const text = await readTextForCopy(p); return copyOut(() => clipboard.writeText(text)); }
   if (kind === 'image' && fs.existsSync(p)) {
     const png = nativeImage.createFromPath(p).toPNG();
     if (png.length) return copyOut(() => clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]));
@@ -165,34 +166,296 @@ async function copyItem(p) {
   return copyOut(() => clipboard.writeText(p));
 }
 
-// Screenshot of the display under the cursor at 1–4× its logical size, added to the active shelf.
-async function captureScreen() {
-  const scale = Math.min(4, Math.max(1, Number(store.settings.captureScale) || 2));
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+// ── screen capture: whole screen, an area, a window, after a delay; then optional markup
+let captureWin = null, captureJob = null;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function captureScale() { return Math.min(4, Math.max(1, Number(store.settings.captureScale) || 2)); }
+async function grabDisplay(display) {
+  const scale = captureScale(), factor = Math.max(display.scaleFactor, scale);
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: Math.round(display.size.width * factor), height: Math.round(display.size.height * factor) } });
+  const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[0];
+  if (!source || source.thumbnail.isEmpty()) throw new Error(tr(IS_MAC ? 'captureDeniedMac' : 'captureFailed'));
+  let image = source.thumbnail;
+  const target = { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) };
+  if (image.getSize().width < target.width) image = image.resize({ ...target, quality: 'best' });
+  return image;
+}
+async function withShelfHidden(fn) {
   const wasVisible = shelfWin && shelfWin.isVisible();
   if (wasVisible) shelfWin.hide();
-  await new Promise(r => setTimeout(r, 250)); // let the shelf disappear before grabbing the screen
-  try {
-    const factor = Math.max(display.scaleFactor, scale);
-    const thumbnailSize = { width: Math.round(display.size.width * factor), height: Math.round(display.size.height * factor) };
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize });
-    const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[0];
-    if (!source || source.thumbnail.isEmpty()) throw new Error(tr(IS_MAC ? 'captureDeniedMac' : 'captureFailed'));
-    let image = source.thumbnail;
-    const target = { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) };
-    if (image.getSize().width < target.width) image = image.resize({ ...target, quality: 'best' });
-    const file = stash.saveBlob(`Screenshot ${require('./stash').timestamp()}@${scale}x.png`, image.toPNG());
-    store.checkpoint(); store.addPaths(store.active, [file]); pushState();
-    return { path: file, ...image.getSize() };
-  } finally { if (wasVisible) shelfWin.showInactive(); }
+  await sleep(250); // let the shelf disappear before grabbing the screen
+  try { return await fn(); } finally { if (wasVisible && !(captureWin && !captureWin.isDestroyed())) shelfWin.showInactive(); }
 }
+// Adds a finished picture to the shelf (and reads its text when OCR is set up).
+function savePicture(png, label = 'Screenshot') {
+  const file = stash.saveBlob(`${label} ${require('./stash').timestamp()}@${captureScale()}x.png`, png);
+  store.checkpoint(); store.addPaths(store.active, [file]); pushState();
+  autoOcr(file);
+  return file;
+}
+// mode: 'screen' | 'area' | 'window'; delay in seconds.
+async function capture(mode = 'screen', delay = 0) {
+  if (delay > 0) { if (shelfWin && shelfWin.isVisible()) shelfWin.webContents.send('flash', tr('captureIn', { n: I18N.number(language(), delay) })); await sleep(delay * 1000); }
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  if (mode === 'window') {
+    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 440, height: 260 } });
+    const windows = sources.filter(s => !s.thumbnail.isEmpty() && !/^Drag Shelf/.test(s.name)).map(s => ({ id: s.id, name: s.name, thumb: s.thumbnail.toDataURL() }));
+    if (!windows.length) throw new Error(tr(IS_MAC ? 'captureDeniedMac' : 'captureFailed'));
+    return openCaptureWindow({ mode: 'window', windows }, display, false);
+  }
+  return withShelfHidden(async () => {
+    const image = await grabDisplay(display);
+    if (mode === 'area') return openCaptureWindow({ mode: 'area', image: image.toDataURL() }, display, true);
+    const file = savePicture(image.toPNG());
+    return { path: file, ...image.getSize() };
+  });
+}
+function markupItem(p) {
+  const image = nativeImage.createFromBuffer(fs.readFileSync(p)); if (image.isEmpty()) return;
+  openCaptureWindow({ mode: 'markup', image: image.toDataURL(), source: p }, screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), false);
+}
+function openCaptureWindow(job, display, fullscreen) {
+  if (captureWin && !captureWin.isDestroyed()) captureWin.close();
+  captureJob = job;
+  const wa = display.workArea, b = fullscreen ? display.bounds : { width: Math.min(1200, wa.width - 40), height: Math.min(860, wa.height - 40) };
+  captureWin = new BrowserWindow({
+    ...(fullscreen ? { x: b.x, y: b.y, width: b.width, height: b.height, frame: false, alwaysOnTop: true, enableLargerThanScreen: true, skipTaskbar: true, hasShadow: false, resizable: false, movable: false }
+      : { x: Math.round(wa.x + (wa.width - b.width) / 2), y: Math.round(wa.y + (wa.height - b.height) / 2), width: b.width, height: b.height, minWidth: 520, minHeight: 360, autoHideMenuBar: true }),
+    show: false, icon: B('icon.png'), title: tr('markup'), backgroundColor: '#111111',
+    webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
+  });
+  if (fullscreen) captureWin.setAlwaysOnTop(true, 'screen-saver');
+  captureWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  captureWin.webContents.on('will-navigate', event => event.preventDefault());
+  captureWin.loadFile(R('capture.html'), { query: { ...windowQuery(), ...(TEST ? { test: '1' } : {}) } });
+  captureWin.once('ready-to-show', () => { captureWin.show(); captureWin.focus(); });
+  captureWin.on('closed', () => { captureWin = null; captureJob = null; if (shelfWin && !shelfWin.isVisible() && store.total()) shelfWin.showInactive(); });
+  return { pending: true };
+}
+function wireCaptureIpc() {
+  const fromCapture = e => captureWin && !captureWin.isDestroyed() && e.sender === captureWin.webContents;
+  ipcMain.handle('capture:job', e => (fromCapture(e) ? captureJob : null));
+  ipcMain.handle('capture:window', async (e, id) => {
+    if (!fromCapture(e)) return null;
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()), factor = Math.max(display.scaleFactor, captureScale());
+    captureWin.hide(); await sleep(200);
+    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: Math.round(display.size.width * factor), height: Math.round(display.size.height * factor) } });
+    captureWin.show();
+    const s = sources.find(x => x.id === id); return s ? s.thumbnail.toDataURL() : null;
+  });
+  // Markup of an existing item saves a new copy right after the original on the shelf.
+  ipcMain.handle('capture:save', (e, png) => {
+    if (!fromCapture(e)) return null;
+    const source = captureJob && captureJob.source;
+    if (!source) return savePicture(Buffer.from(png));
+    const file = stash.saveBlob(`${path.basename(source, path.extname(source)).replace(/@\dx$/, '')} (marked up).png`, Buffer.from(png));
+    const at = store.cur.items.findIndex(i => i.p === source);
+    store.checkpoint(); store.addPaths(store.active, [file]);
+    if (at >= 0) store.moveItems(store.active, [file], store.active, at + 1);
+    pushState(); autoOcr(file); return file;
+  });
+  ipcMain.handle('capture:copy', async (e, png) => {
+    if (!fromCapture(e)) return false;
+    const { ClipboardItem } = require('electron');
+    await copyOut(() => clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(png)], { type: 'image/png' }) })]));
+    return true;
+  });
+  ipcMain.on('capture:close', e => { if (fromCapture(e)) captureWin.close(); });
+  ipcMain.on('capture:editing', e => {
+    if (!fromCapture(e) || !captureWin.isAlwaysOnTop()) return;
+    // The area picker covered the whole screen; markup continues in a normal window.
+    const wa = screen.getDisplayMatching(captureWin.getBounds()).workArea, w = Math.min(1200, wa.width - 40), h = Math.min(860, wa.height - 40);
+    captureWin.setAlwaysOnTop(false); captureWin.setResizable(true); captureWin.setMovable(true);
+    captureWin.setBounds({ x: Math.round(wa.x + (wa.width - w) / 2), y: Math.round(wa.y + (wa.height - h) / 2), width: w, height: h });
+  });
+}
+
+// ── OCR: Chakkhu + KhmerOCR in a utility process; the models download on first use.
+const OcrModels = require('./ocr-models');
+let ocrProc = null, ocrSeq = 0, ocrDownload = null;
+const ocrPending = new Map();
+const ocrDir = () => path.join(app.getPath('userData'), 'ocr-models');
+const ocrReady = () => OcrModels.installed(ocrDir());
+function ocrWorker() {
+  if (ocrProc) return ocrProc;
+  const { utilityProcess } = require('electron');
+  ocrProc = utilityProcess.fork(path.join(__dirname, '..', 'ocr', 'worker.js'), [], { serviceName: 'Drag Shelf OCR' });
+  ocrProc.on('message', msg => { const job = ocrPending.get(msg.id); if (!job || msg.progress) return; ocrPending.delete(msg.id); msg.error ? job.reject(new Error(msg.error)) : job.resolve(msg.result); });
+  ocrProc.on('exit', () => { ocrProc = null; for (const job of ocrPending.values()) job.reject(new Error(tr('ocrFailed'))); ocrPending.clear(); });
+  return ocrProc;
+}
+function stopOcrWorker() { if (ocrProc) { ocrProc.kill(); ocrProc = null; } }
+async function downloadOcrModels() {
+  if (ocrReady()) return true;
+  if (ocrDownload) return ocrDownload;
+  ocrDownload = OcrModels.download(ocrDir(), url => net.fetch(url), (got, total) => {
+    if (shelfWin && !shelfWin.isDestroyed()) shelfWin.webContents.send('flash', tr('ocrDownloading', { pct: I18N.number(language(), Math.floor((got / total) * 100)) }));
+  }).then(() => true).finally(() => { ocrDownload = null; pushState(); });
+  return ocrDownload;
+}
+async function askForOcrModels() {
+  if (ocrReady()) return true;
+  const mb = I18N.number(language(), Math.round(OcrModels.TOTAL_BYTES / 1e6));
+  if (!TEST) {
+    const { response } = await dialog.showMessageBox({ type: 'question', buttons: [tr('ocrDownload'), tr('cancel')], defaultId: 0, cancelId: 1, message: tr('ocrSetupTitle'), detail: tr('ocrSetupDetail', { mb }) });
+    if (response !== 0) return false;
+  }
+  try { return await downloadOcrModels(); } catch (err) { if (!TEST) dialog.showErrorBox(tr('ocrSetupTitle'), err.message); return false; }
+}
+// Text in an image file, cached by path + modification time.
+async function ocrFile(p) {
+  const st = fs.statSync(p), cached = store.ocrText(p, st.mtimeMs);
+  if (cached != null) return cached;
+  // From a buffer, so "@2x" file names don't make nativeImage halve the size.
+  let image = nativeImage.createFromBuffer(fs.readFileSync(p)); if (image.isEmpty()) return '';
+  let { width, height } = image.getSize();
+  const MAX = 4096;
+  if (Math.max(width, height) > MAX) { const k = MAX / Math.max(width, height); image = image.resize({ width: Math.round(width * k), height: Math.round(height * k), quality: 'best' }); ({ width, height } = image.getSize()); }
+  const raw = image.toBitmap();
+  const rgba = Buffer.alloc(raw.length);
+  for (let i = 0; i < raw.length; i += 4) { rgba[i] = raw[i + 2]; rgba[i + 1] = raw[i + 1]; rgba[i + 2] = raw[i]; rgba[i + 3] = 255; } // BGRA → RGBA
+  const id = ++ocrSeq, worker = ocrWorker();
+  const result = await new Promise((resolve, reject) => { ocrPending.set(id, { resolve, reject }); worker.postMessage({ id, dir: ocrDir(), mode: store.settings.ocrMode === 'fast' ? 'fast' : 'best', image: { data: rgba.buffer.slice(rgba.byteOffset, rgba.byteOffset + rgba.length), width, height } }); });
+  store.setOcrText(p, st.mtimeMs, result.text);
+  return result.text;
+}
+function autoOcr(p) { if (store.settings.ocrAuto !== false && ocrReady()) ocrFile(p).then(() => pushState(), () => {}); }
+async function copyImageText(p) {
+  if (!(await askForOcrModels())) return null;
+  const text = await ocrFile(p);
+  if (text) await copyOut(() => clipboard.writeText(text));
+  return text;
+}
+
+// ── text items: what kind of text, snippet placeholders
+function textInfo(p) {
+  if (!isTextFile(p)) return null;
+  try { const fd = fs.openSync(p, 'r'), buf = Buffer.alloc(4096), n = fs.readSync(fd, buf, 0, 4096, 0); fs.closeSync(fd); return TextOps.detect(buf.subarray(0, n).toString('utf8')); } catch (_) { return null; }
+}
+async function readTextForCopy(p) {
+  const text = fs.readFileSync(p, 'utf8');
+  if (!/\{(date|time|datetime|year|clipboard)\}/.test(text)) return text;
+  let current = ''; try { current = await clipboard.readText(); } catch (_) { /* empty */ }
+  return TextOps.expand(text, { clipboard: current });
+}
+
+// ── quick ZIP of the active shelf into Downloads
+function walkFiles(root) {
+  const st = fs.statSync(root); if (st.isFile()) return [{ file: root, name: path.basename(root) }];
+  const out = [];
+  (function walk(dir, rel) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name.startsWith('.')) continue; const full = path.join(dir, e.name), name = rel + '/' + e.name; if (e.isDirectory()) walk(full, name); else if (e.isFile()) out.push({ file: full, name }); } })(root, path.basename(root));
+  return out;
+}
+function zipTo(target, entries) {
+  const yazl = require('yazl'), zip = new yazl.ZipFile();
+  for (const e of entries) e.buffer ? zip.addBuffer(e.buffer, e.name) : zip.addFile(e.file, e.name);
+  return new Promise((resolve, reject) => { zip.outputStream.pipe(fs.createWriteStream(target)).on('close', () => resolve(target)).on('error', reject); zip.end(); });
+}
+async function quickZip() {
+  const files = store.cur.items.map(i => i.p).filter(p => fs.existsSync(p)).flatMap(walkFiles);
+  if (!files.length) return null;
+  const used = new Set();
+  for (const f of files) { let name = f.name, n = 1; const ext = path.extname(f.name); while (used.has(name.toLowerCase())) name = `${f.name.slice(0, f.name.length - ext.length)} (${++n})${ext}`; used.add(name.toLowerCase()); f.name = name; }
+  const { uniqueIn, sanitize } = require('./stash');
+  const target = uniqueIn(TEST && process.env.DRAGSHELF_TEST_EXPORT_DIR ? process.env.DRAGSHELF_TEST_EXPORT_DIR : app.getPath('downloads'), `${sanitize(store.cur.name) || 'Shelf'}.zip`);
+  await zipTo(target, files);
+  if (!TEST) shell.showItemInFolder(target);
+  return target;
+}
+
+// ── backup / restore: shelves, history, pins, smart-shelf rules, settings, and the stash files themselves
+async function backupTo(target) {
+  const entries = [{ name: 'backup.json', buffer: Buffer.from(JSON.stringify({ ...store.exportBackup(), stashDir: stash.dir }, null, 2)) }];
+  if (fs.existsSync(stash.dir)) for (const f of walkFiles(stash.dir)) entries.push({ file: f.file, name: 'stash/' + f.name.split('/').slice(1).join('/') });
+  return zipTo(target, entries);
+}
+async function restoreFrom(file) {
+  let manifest = null; const stashRoot = path.resolve(stash.dir);
+  for (const entry of await require('./unzip').readZip(file)) {
+    if (entry.name === 'backup.json') { manifest = JSON.parse(entry.data.toString('utf8')); continue; }
+    if (!entry.name.startsWith('stash/')) continue;
+    const dest = path.resolve(stashRoot, entry.name.slice(6));
+    if (!dest.startsWith(stashRoot + path.sep)) continue;           // never write outside the stash
+    fs.mkdirSync(path.dirname(dest), { recursive: true }); if (!fs.existsSync(dest)) fs.writeFileSync(dest, entry.data);
+  }
+  if (!manifest) throw new Error(tr('backupInvalid'));
+  // Stash paths from another computer point at this computer's stash instead.
+  const from = manifest.stashDir ? String(manifest.stashDir).replace(/[\\/]+$/, '') : '';
+  const remap = p => {
+    if (!from || !(p === from || p.startsWith(from + '/') || p.startsWith(from + '\\'))) return p;
+    return path.join(stashRoot, ...p.slice(from.length + 1).split(/[\\/]/));
+  };
+  manifest.shelves.forEach(s => (s.items || []).forEach(i => { i.p = remap(i.p); }));
+  (manifest.history || []).forEach(h => { h.p = remap(h.p); });
+  store.importBackup(manifest); applyTheme(); updateLanguage(); pushState();
+  if (store.settings.autoPaste) ensureClipWatch().start();
+}
+async function backupDialog() {
+  const { canceled, filePath } = await dialog.showSaveDialog({ title: tr('backup'), defaultPath: path.join(app.getPath('documents'), `Drag Shelf backup ${require('./stash').timestamp()}.zip`), filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+  if (!canceled && filePath) { await backupTo(filePath); shell.showItemInFolder(filePath); }
+}
+async function restoreDialog() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({ title: tr('restore'), properties: ['openFile'], filters: [{ name: 'ZIP', extensions: ['zip'] }] });
+  if (canceled || !filePaths[0]) return;
+  try { await restoreFrom(filePaths[0]); } catch (err) { dialog.showErrorBox(tr('restore'), err.message); }
+}
+
+// ── rebuild the most recent delivery's shelf and reopen the delivery workspace
+function rebuildLastDelivery() {
+  const entry = delivery && delivery.data.history[0]; if (!entry) return false;
+  store.checkpoint();
+  const index = store.newShelf(n => tr('restoredShelf', { name: entry.shelf.name, n }));
+  store.shelves[index].items = JSON.parse(JSON.stringify(entry.shelf.items)); store.shelves[index].delivery = JSON.parse(JSON.stringify(entry.config));
+  store.setActive(index); pushState(); openDelivery(); return true;
+}
+
+// ── quick look: native Quick Look on macOS, a preview window elsewhere
+let previewWin = null;
+function quickLook(p) {
+  if (!p || !fs.existsSync(p)) return;
+  if (IS_MAC && shelfWin && !TEST) return shelfWin.previewFile(p, path.basename(p));
+  if (previewWin && !previewWin.isDestroyed()) previewWin.close();
+  const wa = workAreaAt();
+  previewWin = new BrowserWindow({ width: Math.min(960, wa.width - 60), height: Math.min(720, wa.height - 60), title: path.basename(p), icon: B('icon.png'), autoHideMenuBar: true, backgroundColor: '#1d1e1a',
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false, plugins: true } });
+  previewWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  previewWin.webContents.on('will-navigate', event => event.preventDefault());
+  previewWin.webContents.on('before-input-event', (e, input) => { if (input.type === 'keyDown' && (input.key === 'Escape' || input.key === ' ')) previewWin.close(); });
+  previewWin.loadFile(p).catch(() => { if (previewWin && !previewWin.isDestroyed()) previewWin.close(); shell.openPath(p); });
+  previewWin.on('closed', () => { previewWin = null; });
+}
+
+// ── quick-paste palette: a global shortcut opens history at the cursor; Enter pastes into the app in front
+let paletteWin = null;
+function openPalette() {
+  if (paletteWin && !paletteWin.isDestroyed()) { paletteWin.close(); return; }
+  const pt = screen.getCursorScreenPoint(), wa = workAreaAt(pt), W = 420, H = 460;
+  paletteWin = new BrowserWindow({ x: Math.round(Math.min(Math.max(pt.x - W / 2, wa.x + 8), wa.x + wa.width - W - 8)), y: Math.round(Math.min(Math.max(pt.y - 40, wa.y + 8), wa.y + wa.height - H - 8)), width: W, height: H,
+    frame: false, transparent: true, resizable: false, alwaysOnTop: true, skipTaskbar: true, show: false, hasShadow: false, ...(IS_MAC ? { type: 'panel' } : {}),
+    webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+  paletteWin.setAlwaysOnTop(true, 'pop-up-menu');
+  paletteWin.loadFile(R('palette.html'), { query: { ...windowQuery(), ...(TEST ? { test: '1' } : {}) } });
+  paletteWin.once('ready-to-show', () => { paletteWin.show(); paletteWin.focus(); });
+  paletteWin.on('blur', () => { if (paletteWin && !paletteWin.isDestroyed() && !TEST) paletteWin.close(); });
+  paletteWin.on('closed', () => { paletteWin = null; });
+}
+async function pasteFromPalette(p, { paste = true } = {}) {
+  if (paletteWin && !paletteWin.isDestroyed()) paletteWin.close();
+  await copyItem(p);
+  if (!paste || TEST) return;
+  if (IS_MAC) app.hide();
+  await sleep(160); // the previous app is in front again
+  try { const { uIOhook, UiohookKey } = require('uiohook-napi'); uIOhook.keyTap(UiohookKey.V, [IS_MAC ? UiohookKey.Meta : UiohookKey.Ctrl]); } catch (_) { /* the item is on the clipboard; paste manually */ }
+}
+function registerQuickPaste(accel = store.settings.quickPasteKey) { try { return globalShortcut.register(accel, openPalette); } catch (_) { return false; } }
 
 function historyEntries() {
   return store.historyView().map(h => {
     const ext = path.extname(h.p).slice(1).toLowerCase(), exists = fs.existsSync(h.p);
     let preview = '';
     if (exists && isTextFile(h.p)) { try { const fd = fs.openSync(h.p, 'r'), buf = Buffer.alloc(240); const n = fs.readSync(fd, buf, 0, 240, 0); fs.closeSync(fd); preview = buf.subarray(0, n).toString('utf8').replace(/�$/, '').replace(/\s+/g, ' ').trim(); } catch (_) { /* unreadable */ } }
-    return { path: h.p, name: path.basename(h.p), kind: exists ? EXT_TO_KIND[ext] || (fs.statSync(h.p).isDirectory() ? 'folder' : 'file') : 'missing', exists, added: h.added, pinned: h.pinned, preview, onShelf: store.cur.items.some(i => i.p === h.p) };
+    const info = exists ? textInfo(h.p) : null;
+    return { ocr: store.ocrOf(h.p), textKind: info ? info.kind : '', path: h.p, name: path.basename(h.p), kind: exists ? EXT_TO_KIND[ext] || (fs.statSync(h.p).isDirectory() ? 'folder' : 'file') : 'missing', exists, added: h.added, pinned: h.pinned, preview, onShelf: store.cur.items.some(i => i.p === h.p) };
   });
 }
 
@@ -374,8 +637,26 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: tr('autoPaste'), type: 'checkbox', checked: !!st.autoPaste, click: () => setAutoPaste(!st.autoPaste) },
     { label: tr('pasteNow'), click: () => pasteNow() },
-    { label: tr('captureScreen'), click: () => captureScreen().catch(err => dialog.showErrorBox(tr('captureScreen'), err.message)) },
-    { label: tr('captureScale'), submenu: [1, 2, 3, 4].map(n => ({ label: `${n}×`, type: 'radio', checked: Number(st.captureScale) === n, click: set('captureScale', n) })) },
+    { label: tr('quickPaste'), sublabel: accelLabel(st.quickPasteKey), click: openPalette },
+    { label: tr('captureScreen'), submenu: [
+      ...[['captureFull', 'screen', 0], ['captureArea', 'area', 0], ['captureWindow', 'window', 0], ['captureDelay3', 'area', 3], ['captureDelay10', 'screen', 10]].map(([key, mode, delay]) => ({ label: tr(key), click: () => capture(mode, delay).catch(err => dialog.showErrorBox(tr('captureScreen'), err.message)) })),
+      { type: 'separator' },
+      ...[1, 2, 3, 4].map(n => ({ label: tr('captureScaleN', { n: `${n}×` }), type: 'radio', checked: Number(st.captureScale) === n, click: set('captureScale', n) }))] },
+    { label: tr('ocrMenu'), submenu: [
+      ocrReady() ? { label: tr('ocrInstalled'), enabled: false } : { label: tr('ocrDownloadN', { mb: I18N.number(language(), Math.round(OcrModels.TOTAL_BYTES / 1e6)) }), enabled: !ocrDownload, click: () => askForOcrModels() },
+      { label: tr('ocrAuto'), type: 'checkbox', checked: st.ocrAuto !== false, click: set('ocrAuto', st.ocrAuto === false) },
+      { label: tr('ocrBest'), type: 'radio', checked: st.ocrMode !== 'fast', click: set('ocrMode', 'best') },
+      { label: tr('ocrFast'), type: 'radio', checked: st.ocrMode === 'fast', click: set('ocrMode', 'fast') },
+      ...(ocrReady() ? [{ type: 'separator' }, { label: tr('ocrRemove'), click: () => { stopOcrWorker(); OcrModels.remove(ocrDir()); pushState(); } }] : []),
+      { type: 'separator' }, { label: 'Chakkhu ចក្ខុ · Ing Muyleang · Apache-2.0', enabled: false }, { label: 'KhmerOCR · Seanghay Yath · MIT', enabled: false }] },
+    { label: tr('privacyMenu'), submenu: [
+      { label: tr('skipConcealed'), type: 'checkbox', checked: st.skipConcealed !== false, click: set('skipConcealed', st.skipConcealed === false) },
+      { type: 'separator' },
+      ...[0, 1, 7, 30].map(n => ({ label: n ? tr('keepHistoryDays', { n: I18N.number(language(), n) }) : tr('keepHistoryForever'), type: 'radio', checked: (Number(st.historyDays) || 0) === n, click: () => { store.setSetting('historyDays', n); store.expireHistory(); pushState(); } }))] },
+    { label: tr('quickZip'), click: () => quickZip().catch(err => dialog.showErrorBox(tr('quickZip'), err.message)) },
+    ...(delivery && delivery.data.history.length ? [{ label: tr('rebuildDelivery'), click: rebuildLastDelivery }] : []),
+    { label: tr('backup'), click: backupDialog },
+    { label: tr('restore'), click: restoreDialog },
     { label: tr('undo'), enabled: store.canUndo, click: () => { store.undo(); pushState(); } },
     { label: tr('redo'), enabled: store.canRedo, click: () => { store.redo(); pushState(); } },
     { type: 'separator' },
@@ -420,6 +701,10 @@ function openItemMenu(index) {
     { label: tr('copyPath'), click: () => copyOut(() => clipboard.writeText(it.p)) },
     { label: tr('copyItem'), click: () => copyItem(it.p) },
     ...(isTextFile(it.p) ? [{ label: tr('splitMerge'), click: () => shelfWin.webContents.send('text:open', index) }] : []),
+    { label: tr('quickLook'), click: () => quickLook(it.p) },
+    ...(EXT_TO_KIND[path.extname(it.p).slice(1).toLowerCase()] === 'image' ? [
+      { label: tr('markup'), click: () => markupItem(it.p) },
+      { label: tr('copyImageText'), click: () => copyImageText(it.p).then(text => { if (text != null) shelfWin.webContents.send('flash', text ? tr('copied') : tr('ocrNoText')); pushState(); }).catch(err => dialog.showErrorBox(tr('copyImageText'), err.message)) }] : []),
     { type: 'separator' },
     { label: tr(it.done ? 'markNotDone' : 'markDone'), click: () => { store.toggleDone(store.active, index); pushState(); } },
     { label: tr('remove'), click: () => { store.checkpoint(); store.removePaths(store.active, [it.p]); pushState(); setTimeout(autoHideIfEmpty, 50); } }
@@ -447,7 +732,30 @@ function wireIpc() {
       case 'undo': store.undo(); break;
       case 'redo': store.redo(); break;
       case 'paste': { const n = await pasteNow(); pushState(); return n; }
-      case 'capture': try { return await captureScreen(); } catch (err) { return { error: err.message }; }
+      case 'capture': try { return await capture(p.mode || 'screen', Number(p.delay) || 0); } catch (err) { return { error: err.message }; }
+      case 'markup': markupItem(p.path); return true;
+      case 'ocrCopy': try { const text = await copyImageText(p.path); pushState(); return { text }; } catch (err) { return { error: err.message }; }
+      case 'ocrSetup': return askForOcrModels();
+      case 'quickLook': quickLook(p.path); return true;
+      case 'zip': try { return { path: await quickZip() }; } catch (err) { return { error: err.message }; }
+      case 'backup': await backupDialog(); return true;
+      case 'restore': await restoreDialog(); return true;
+      case 'rebuildDelivery': return rebuildLastDelivery();
+      case 'rules': store.setRules(p.rules); pushState(); return store.rules;
+      case 'palette': openPalette(); return true;
+      case 'palettePaste': await pasteFromPalette(p.path, { paste: p.paste !== false }); return true;
+      case 'newSnippet': {
+        const file = stash.saveText(String(p.text || '{date} '));
+        store.checkpoint(); store.addPaths(store.active, [file]); store.togglePin(file); pushState();
+        return store.cur.items.findIndex(i => i.p === file);
+      }
+      case 'openValue': {
+        const v = String(p.value || '');
+        if (p.kind === 'link' && /^https?:\/\//i.test(v)) shell.openExternal(v);
+        else if (p.kind === 'email' && /^[^\s@]+@[^\s@]+$/.test(v)) shell.openExternal('mailto:' + v);
+        else if (p.kind === 'phone') shell.openExternal('tel:' + v.replace(/[^\d+]/g, ''));
+        return true;
+      }
       case 'autoPaste': setAutoPaste(p.value); return !!p.value;
       case 'addFromHistory': if (fs.existsSync(p.path)) store.addPaths(store.active, [p.path]); break;
       case 'pinHistory': { const on = store.togglePin(p.path); pushState(); return on; }
@@ -458,7 +766,7 @@ function wireIpc() {
       case 'saveText': { const it = store.cur.items[p.index]; if (!it || !isTextFile(it.p)) return false; fs.writeFileSync(it.p, String(p.text), 'utf8'); pushState(); return true; }
       case 'split': return splitTextItem(p.index, p.separator, p.opts || {});
       case 'merge': return mergeTextItems(p.separator, p.opts || {});
-      case 'add': store.addPaths(p.shelf ?? store.active, p.paths || []); break;
+      case 'add': if (p.route && (p.shelf ?? store.active) === store.active) store.addRouted(p.paths || []); else store.addPaths(p.shelf ?? store.active, p.paths || []); (p.paths || []).forEach(x => { if (EXT_TO_KIND[path.extname(x).slice(1).toLowerCase()] === 'image') autoOcr(x); }); break;
       case 'toggleDone': store.toggleDone(p.shelf ?? store.active, p.index); break;
       case 'remove': store.removePaths(p.shelf ?? store.active, p.paths || []); break;
       case 'clearShelf': store.clearShelf(p.shelf ?? store.active); break;
@@ -501,6 +809,8 @@ function wireIpc() {
   ipcMain.on('win:move', (e, dx, dy) => { if (moveStart) shelfWin.setPosition(Math.round(moveStart[0] + dx), Math.round(moveStart[1] + dy)); });
   ipcMain.on('win:hide', () => hideShelf());
   ipcMain.on('ctx:item', (e, i) => openItemMenu(i));
+  ipcMain.on('ctx:capture', () => Menu.buildFromTemplate([['captureArea', 'area', 0], ['captureFull', 'screen', 0], ['captureWindow', 'window', 0], ['captureDelay3', 'area', 3], ['captureDelay10', 'screen', 10]]
+    .map(([key, mode, delay]) => ({ label: tr(key), click: () => capture(mode, delay).catch(err => shelfWin.webContents.send('flash', err.message)) }))).popup({ window: shelfWin }));
   ipcMain.on('ctx:tab', (e, i) => openTabMenu(i));
   ipcMain.on('focusable', (e, on) => { if (!shelfWin) return; shelfWin.setFocusable(!!on); if (on) { app.focus({ steal: true }); shelfWin.focus(); } });
   ipcMain.on('phone:close', () => closePhone());
@@ -520,7 +830,7 @@ function wireIpc() {
 app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
-  if (clipWatch) clipWatch.stop();
+  if (clipWatch) clipWatch.stop(); stopOcrWorker();
   if (updates) updates.stop();
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
@@ -535,21 +845,23 @@ app.whenReady().then(() => {
   }
   store = new Store(app.getPath('userData'), tr('shelfName', { n: 1 }));
   stash = new Stash(path.join(app.getPath('userData'), 'stash'));
-  phone = new PhoneServer(stash.dir, language);
+  phone = new PhoneServer(stash.dir, language, () => store.cur.items.map(i => i.p));
   delivery = new Delivery(app.getPath('userData'), require('./delivery-images'));
   dragIcon = nativeImage.createFromPath(B('dragicon.png'));
   ensureExcluded(); applyTheme();
   updateLanguage();
 
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
-  wireIpc();
+  wireIpc(); wireCaptureIpc();
+  ipcMain.handle('palette:items', () => historyEntries());
   deliveryJobs = require('./delivery-ipc')({ window: () => deliveryWin, shelfId: () => deliveryShelfId, setShelfId: value => { deliveryShelfId = value; }, store: () => store, service: () => delivery, state: buildState, language, t: tr, push: pushState, test: () => TEST });
   createShelfWindow();
   if (store.settings.autoPaste) ensureClipWatch().start(); // keeps pasting copies onto the shelf in the background
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) {
     updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
-    createTray(); registerHotkey(store.settings.hotkey); startWatching();
+    createTray(); registerHotkey(store.settings.hotkey); registerQuickPaste(); startWatching();
+    setInterval(() => { store.expireHistory(); }, 36e5);
     if (app.isPackaged) updates.start();
   }
   if (!TEST && !store.settings.guideDone) openGuide();
@@ -566,7 +878,7 @@ app.whenReady().then(() => {
       shelfWin: () => shelfWin, phoneWin: () => phoneWin, guideWin: () => guideWin, keyWin: () => keyWin,
       showShelf: () => { placeCard(80, 60); shelfWin.showInactive(); pushState(); },
       openPhone, openGuide, openShortcutWindow, pushState, store: () => store,
-      openDelivery, deliveryWin: () => deliveryWin, clipWatch: () => clipWatch, captureScreen,   delivery: () => delivery,
+      openDelivery, deliveryWin: () => deliveryWin, clipWatch: () => clipWatch, capture, captureWin: () => captureWin, paletteWin: () => paletteWin, openPalette, markupItem, quickZip, backupTo, restoreFrom, ocrFile, ocrDir, rebuildLastDelivery, phone: () => phone,   delivery: () => delivery,
       imageSize: file => nativeImage.createFromPath(file).getSize(),
       writeTestImage: (source, destination, width, height) => fs.writeFileSync(destination, nativeImage.createFromPath(source).resize({ width, height }).toPNG())
     };

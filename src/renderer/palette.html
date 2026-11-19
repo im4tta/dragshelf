@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Quick paste</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="palette.css">
+</head>
+<body>
+  <main id="palette" role="dialog" aria-labelledby="title">
+    <h1 id="title" class="sr" data-i18n="quickPaste">Quick paste</h1>
+    <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search history" data-i18n-placeholder="searchHistory" role="combobox" aria-controls="list" aria-expanded="true">
+    <ul id="list" role="listbox" aria-label="History"></ul>
+    <p id="empty" data-i18n="historyEmpty" hidden>Everything you add or copy appears here.</p>
+    <footer data-i18n="quickPasteHint">↑↓ choose · Enter paste · ⇧Enter copy only · Esc close</footer>
+  </main>
+  <script src="icons.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
+  <script src="palette.js"></script>
+</body>
+</html>

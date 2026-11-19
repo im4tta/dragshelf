@@ -50,7 +50,7 @@
         <div class="panel-tools"><input id="historySearch" type="search" placeholder="Search history" data-i18n-placeholder="searchHistory"><button id="pasteBtn" class="icon" title="Paste clipboard to shelf" data-i18n-title="pasteNow"></button></div>
         <ul id="historyList"></ul>
         <p id="historyEmpty" class="panel-empty" data-i18n="historyEmpty">Everything you add or copy appears here.</p>
-        <div class="panel-foot"><span class="sp"></span><button id="clearHistory" class="link danger" data-i18n="clearHistory">Clear history</button></div>
+        <div class="panel-foot"><button id="newSnippet" class="link" data-i18n="newSnippet" data-i18n-title="snippetHint">New snippet</button><span class="sp"></span><button id="clearHistory" class="link danger" data-i18n="clearHistory">Clear history</button></div>
       </section>
 
       <section id="textTools" class="panel" hidden>
@@ -62,6 +62,19 @@
           <span class="sp"></span><button id="textUndo" class="icon" title="Undo" data-i18n-title="undo"></button><button id="textRedo" class="icon" title="Redo" data-i18n-title="redo"></button></div>
         <div class="panel-tools actions"><button id="doSplit" class="pill" data-i18n="splitLines">Split</button><button id="doMerge" class="pill" data-i18n="mergeLines">Merge</button><span class="sp"></span><button id="saveText" class="pill accent" data-i18n="saveText">Save</button></div>
         <div class="panel-foot"><button id="splitItems" class="link" data-i18n="splitItems">Split into items</button><span class="sp"></span><button id="mergeItems" class="link" data-i18n="mergeItems">Merge text items</button></div>
+      </section>
+      <section id="rules" class="panel" hidden>
+        <div class="panel-top"><button class="icon" data-close title="Back" data-i18n-title="back"></button><strong data-i18n="smartShelves">Smart shelves</strong></div>
+        <p class="panel-note" data-i18n="smartShelvesHint">New items that match go to that shelf.</p>
+        <ul id="ruleList"></ul>
+        <div class="panel-tools rule-form"><select id="ruleKind" aria-label="Rule"><option value="ext" data-i18n="ruleExt">File type is</option><option value="name" data-i18n="ruleName">Name contains</option></select>
+          <input id="ruleValue" placeholder="pdf, png" aria-label="Value"><span>→</span><select id="ruleShelf" aria-label="Shelf"></select></div>
+        <div class="panel-foot"><span class="sp"></span><button id="addRule" class="pill accent" data-i18n="addRule">Add rule</button></div>
+      </section>
+
+      <section id="commands" class="panel" hidden>
+        <input id="cmdInput" type="search" autocomplete="off" placeholder="Type a command" data-i18n-placeholder="searchCommands" role="combobox" aria-controls="cmdList" aria-expanded="true">
+        <ul id="cmdList" role="listbox" aria-label="Commands"></ul>
       </section>
       <div id="toast" role="status"></div>
 

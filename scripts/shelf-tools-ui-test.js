@@ -75,7 +75,7 @@ const rows = page => page.locator('#list .row .name').allTextContents();
 
     // Screen capture at 2× goes straight onto the shelf.
     await app.evaluate(() => global.__test.store().setSetting('captureScale', 2));
-    await shelf.click('#captureBtn'); await shelf.waitForFunction(() => window.__t.state().shelves[0].items.length === 5, null, { timeout: 10000 });
+    await shelf.evaluate(() => window.shelf.invoke('act', 'capture', { mode: 'screen' })); await shelf.waitForFunction(() => window.__t.state().shelves[0].items.length === 5, null, { timeout: 10000 });
     const capturePath = await app.evaluate(() => global.__test.store().cur.items[4].p);
     const screenWidth = await app.evaluate(({ screen }) => screen.getPrimaryDisplay().size.width);
     const capture = { name: path.basename(capturePath), width: fs.readFileSync(capturePath).readUInt32BE(16) }; // PNG IHDR width

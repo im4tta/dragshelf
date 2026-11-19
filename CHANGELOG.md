@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+- **Khmer + English text recognition (OCR):** copy the text out of any image (right-click → *Copy text from image*), and new screenshots are read automatically so History and Quick paste can find them by their words. Uses Chakkhu ចក្ខុ by Ing Muyleang with the KhmerOCR detector, entirely on your computer. The models (≈50 MB) download once on first use and are checksum-verified, so the installers stay small (+≈3 MB for the runtime).
+- **Quick paste** (⌥⇧V / Ctrl+Shift+V): a searchable palette of history and pins at the cursor; Enter pastes into the app in front, ⇧Enter only copies.
+- **Capture an area, a window, or after a delay**, then **mark it up**: crop, arrow, box, highlight and blur, with undo/redo. *Mark up…* on any image saves an edited copy next to the original.
+- **Smart shelves:** rules such as “PDFs → Contracts” send new items to the right shelf.
+- **Smart rows:** colours show a swatch; links, e-mail addresses and phone numbers get one-click actions; JSON and code are labelled; images with text are marked.
+- **Snippets:** pinned text with `{date}`, `{time}`, `{datetime}`, `{year}` and `{clipboard}` placeholders, filled in when copied or quick-pasted.
+- **Clipboard privacy:** auto-paste ignores copies that password managers mark as secret; history can forget unpinned items after 1, 7 or 30 days.
+- **Share to phone:** the phone page now also lists the shelf’s files for download over your Wi-Fi.
+- **Rebuild last delivery**, **Quick ZIP of this shelf**, and **Back up / Restore** (shelves, history, pins, rules, settings and saved items in one ZIP).
+- **Command bar** (⌘K / Ctrl+K), **Quick Look** (Space), and full keyboard use of the shelf (arrows, Enter, Delete, D to tick) with screen-reader labels.
+
 ## 1.5.0
 - **Auto-paste:** turn on *Auto-paste copied items* (tray/menu-bar menu or the History panel) and whatever you copy lands on the active shelf, even while the shelf is hidden: files of any type copied in Finder/Explorer (by reference), images, links and text. *Paste clipboard to shelf* and ⌘/Ctrl+V do it once.
 - **Screen capture:** the camera button in the shelf header (or the menu) adds a screenshot of the current display at 1×–4× resolution (*Screenshot resolution*).

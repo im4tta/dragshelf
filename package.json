@@ -13,8 +13,10 @@
     "playwright-core": "^1.64.1"
   },
   "dependencies": {
+    "onnxruntime-web": "^1.21.0",
     "qrcode": "^1.5.4",
     "uiohook-napi": "^1.5.5",
+    "yauzl": "^3.2.0",
     "yazl": "^3.3.1"
   },
   "repository": {
@@ -29,6 +31,7 @@
     "test:unit": "node --test scripts/windows-migration.test.js scripts/phone.test.js scripts/i18n.test.js scripts/delivery.test.js scripts/drop-files.test.js scripts/updates.test.js scripts/shelf-tools.test.js",
     "test:drop": "node scripts/drop-test.js",
     "test:tools": "node scripts/shelf-tools-ui-test.js",
+    "test:features": "node scripts/features-ui-test.js",
     "test:delivery": "node scripts/delivery-ui-test.js",
     "test:khmer": "node scripts/khmer-test.js",
     "test:display": "node scripts/display-test.js",

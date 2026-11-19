@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.ocr-models/
 *.log
 .DS_Store
 .env

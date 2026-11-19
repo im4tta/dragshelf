@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Capture</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="capture.css">
+</head>
+<body>
+  <section id="picker" hidden>
+    <header><strong data-i18n="pickWindow">Choose a window</strong><button class="tool" data-act="cancel" data-i18n="cancel">Cancel</button></header>
+    <ul id="windows"></ul>
+  </section>
+  <div id="stage"><canvas id="canvas"></canvas><div id="hint" data-i18n="dragArea">Drag to select an area · Enter for the whole screen · Esc to cancel</div></div>
+  <nav id="tools" hidden role="toolbar" aria-label="Markup">
+    <button class="tool" data-tool="crop" data-i18n-title="toolCrop" aria-pressed="false"></button>
+    <button class="tool" data-tool="arrow" data-i18n-title="toolArrow" aria-pressed="true"></button>
+    <button class="tool" data-tool="box" data-i18n-title="toolBox" aria-pressed="false"></button>
+    <button class="tool" data-tool="highlight" data-i18n-title="toolHighlight" aria-pressed="false"></button>
+    <button class="tool" data-tool="blur" data-i18n-title="toolBlur" aria-pressed="false"></button>
+    <span class="sep"></span>
+    <button class="tool" data-act="undo" data-i18n-title="undo"></button>
+    <button class="tool" data-act="redo" data-i18n-title="redo"></button>
+    <span class="sep"></span>
+    <button class="tool text" data-act="cancel" data-i18n="cancel">Cancel</button>
+    <button class="tool text" data-act="copy" data-i18n="copyItem">Copy</button>
+    <button class="tool text primary" data-act="save" data-i18n="saveToShelf">Save to shelf</button>
+  </nav>
+  <script src="icons.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="locale.js"></script>
+  <script src="capture.js"></script>
+</body>
+</html>
