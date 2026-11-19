@@ -2,7 +2,7 @@ name: Publish Drag Shelf landing page
 on:
   push:
     branches: [main]
-    paths: ['website/**', '.github/workflows/pages.yml']
+    paths: ['website/**', 'src/renderer/tuk/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Add the Tuk web version (shared with the desktop app)
+        run: |
+          cp -r src/renderer/tuk website/tuk
+          mkdir -p website/fonts && cp src/renderer/fonts/NotoSansKhmer.ttf website/fonts/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website

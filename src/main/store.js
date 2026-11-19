@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   strict: true,             // only pop up when a real file drag is in progress
   moveOnDragOut: true,      // items leave the shelf once dropped somewhere else (hold ⌥ to copy)
   guideDone: false,
+  tukAuto: false,           // Tuk collects everything copied to the clipboard
   asked: false              // already asked for the Accessibility permission once
 };
 

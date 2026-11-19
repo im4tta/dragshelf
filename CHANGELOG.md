@@ -1,12 +1,12 @@
 # Changelog
 
 ## Unreleased
-- Added **Tuk (ទុក)**, a local-first screenshot and clipboard scratchpad on the website (`website/tuk/`). Everything is kept in the browser's IndexedDB; nothing is uploaded.
-  - Paste screenshots and any file type (type recognised by MIME and extension), drop files, or capture the screen at 1×–4× resolution.
-  - Auto-paste reads the clipboard (images, HTML, text and other types) whenever the tab regains focus.
-  - History of every item, pinning, captions, search, type filter, copy-back, and ZIP export with a captions index.
-  - Split / Merge text tool with custom separators (`\n`, `\t`, regex), trim/unique/wrap options, sort/reverse and undo/redo.
-  - Dark theme by default with a light toggle.
+- Added **Tuk (ទុក)** to Drag Shelf: a clipboard history and screenshot window opened from the tray/menu-bar menu.
+  - Optional automatic collection of everything copied (text, links, HTML, images and files of any type), running in the background even while Tuk is closed. Off by default.
+  - Native screen capture at 1×–4×; captions, search, type filter, pinning, copy back without re-collecting, and **⇪ Shelf** to add any item to the current shelf.
+  - Split / Merge text with custom separators (`\n`, `\t`, regex), trim/unique/wrap, sort/reverse and undo/redo.
+  - ZIP export with a captions index; dark theme by default; English and Khmer labels.
+  - The same page is published on the website as a browser-only version (`/tuk/`).
 
 ## 1.4.0
 - Added automatic stable-release checks after startup and daily, plus a manual Check for updates menu action.

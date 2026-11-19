@@ -32,6 +32,8 @@ jobs:
         run: xvfb-run -a npm run test:delivery
       - name: Filesystem drop recovery checks
         run: xvfb-run -a npm run test:drop
+      - name: Tuk clipboard and capture checks
+        run: xvfb-run -a npm run test:tuk
 
   mac:
     needs: test

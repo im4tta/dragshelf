@@ -3,6 +3,9 @@ const { makeZip, uniqueNames, split, merge, detectKind, textKind, History, forma
 const $ = s => document.querySelector(s);
 const state = { items: [], view: 'shots', selected: new Set(), query: '', kind: '', lastClipSig: '' };
 const urls = new Map(); // id -> object URL for previews
+// Inside Drag Shelf the preload bridge gives native clipboard watching, capture and "add to shelf".
+const desk = window.shelf && new URLSearchParams(location.search).has('desktop') ? window.shelf : null;
+document.documentElement.classList.toggle('desktop', !!desk);
 
 /* ---------- storage (IndexedDB) ---------- */
 const dbReady = new Promise((resolve, reject) => {
@@ -41,13 +44,13 @@ async function addItem(partial) {
   render();
   return item;
 }
-async function addBlob(blob, name, source = 'paste') {
+async function addBlob(blob, name, source = 'paste', path = '') {
   const kind = detectKind(name, blob.type);
   const ext = (blob.type.split('/')[1] || 'bin').replace('jpeg', 'jpg').replace('svg+xml', 'svg').replace(/[^a-z0-9]/gi, '');
   name = name || `${kind === 'image' ? 'screenshot' : 'pasted'}-${stamp()}.${ext}`;
   let width, height;
   if (kind === 'image') try { const bmp = await createImageBitmap(blob); width = bmp.width; height = bmp.height; bmp.close(); } catch (_) {}
-  return addItem({ kind, name, mime: blob.type, size: blob.size, blob, width, height, source, sig: await blobSig(blob) });
+  return addItem({ kind, name, mime: blob.type, size: blob.size, blob, width, height, source, path, sig: path ? 'p:' + path + ':' + blob.size : await blobSig(blob) });
 }
 async function addText(text, mime = 'text/plain', source = 'paste') {
   if (!text || !text.trim()) return;
@@ -69,8 +72,19 @@ async function ingestTransfer(dt, source) {
   if (added) toast(`Kept ${added} item${added > 1 ? 's' : ''}`);
 }
 
+// Items read by the main process: { type: 'file' | 'text' | 'html', name, mime, data, path, text }.
+async function ingestNative(items, source) {
+  for (const it of items) {
+    if (it.type === 'file') await addBlob(new Blob([it.data], { type: it.mime || '' }), it.name, source, it.path || '');
+    else await addText(it.text, it.type === 'html' ? 'text/html' : 'text/plain', source);
+  }
+  if (items.length) toast(source === 'auto' ? `Collected ${items.length} copied item${items.length > 1 ? 's' : ''}` : `Kept ${items.length} item${items.length > 1 ? 's' : ''}`);
+  else if (source !== 'auto') toast('Clipboard is empty');
+}
+
 // Async Clipboard API: used by "Paste" and Auto-paste. Recognises every type the browser exposes.
 async function readClipboard(silent) {
+  if (desk) return ingestNative(await desk.invoke('tuk:read'), silent ? 'auto' : 'paste');
   if (!navigator.clipboard) return silent || toast('Clipboard access is not available here — use Ctrl/⌘+V');
   try {
     if (navigator.clipboard.read) {
@@ -104,6 +118,11 @@ async function readClipboard(silent) {
 
 /* ---------- screen capture ---------- */
 async function capture() {
+  if (desk) {
+    try { const shot = await desk.invoke('tuk:capture', Number($('#scale').value)); await addBlob(new Blob([shot.data], { type: 'image/png' }), `capture-${stamp()}@${$('#scale').value}x.png`, 'capture'); toast(`Captured ${shot.width}×${shot.height}`); }
+    catch (err) { toast('Capture failed: ' + String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); }
+    return;
+  }
   if (!navigator.mediaDevices?.getDisplayMedia) return toast('Screen capture is not supported in this browser');
   const scale = Number($('#scale').value);
   const targetW = Math.round(screen.width * scale), targetH = Math.round(screen.height * scale);
@@ -156,20 +175,24 @@ function render() {
   $('#empty').hidden = items.length > 0;
   const grid = $('#grid');
   const existing = new Map([...grid.children].map(el => [el.dataset.id, el]));
-  const frag = document.createDocumentFragment();
-  for (const item of items) { const el = existing.get(item.id) || card(item); updateCard(el, item); frag.append(el); existing.delete(item.id); }
-  existing.forEach(el => el.remove());
-  grid.append(frag);
+  const keep = new Set(items.map(i => i.id));
+  existing.forEach((el, id) => { if (!keep.has(id)) el.remove(); });
+  // Only move cards whose position changed, so their entrance animation doesn't replay on every render.
+  items.forEach((item, index) => {
+    const el = existing.get(item.id) || card(item); updateCard(el, item);
+    if (grid.children[index] !== el) grid.insertBefore(el, grid.children[index] || null);
+  });
 }
 function card(item) {
   const el = document.createElement('article');
-  el.className = 'card'; el.dataset.id = item.id;
+  el.className = 'card enter'; el.dataset.id = item.id;
+  setTimeout(() => el.classList.remove('enter'), 300); // also clears cards created while the grid was hidden
   const preview = document.createElement('div');
   if (item.blob && item.kind === 'image') { preview.className = 'preview'; const img = new Image(); img.loading = 'lazy'; img.alt = ''; img.src = urlFor(item); preview.append(img); }
   else if (item.text != null) { preview.className = 'preview text'; preview.textContent = item.kind === 'html' ? htmlToText(item.text).slice(0, 600) : item.text.slice(0, 600); if (item.kind === 'color') preview.style.background = item.text.trim(); }
   else { preview.className = 'preview'; preview.innerHTML = `<span class="glyph"></span>`; preview.firstChild.textContent = (item.name.split('.').pop() || item.kind).slice(0, 5); }
   preview.onclick = () => open(item);
-  el.innerHTML = `<input type="checkbox" class="check" aria-label="Select"><div class="meta"><input class="caption" placeholder="Add a caption…" aria-label="Caption"><div class="sub"></div><div class="actions"><button data-a="copy" title="Copy back to clipboard">Copy</button><button data-a="pin" title="Pin">📌</button><button data-a="download" title="Download">↓</button><button data-a="text" title="Open in Split / Merge">✂</button><button data-a="delete" title="Delete">✕</button></div></div>`;
+  el.innerHTML = `<input type="checkbox" class="check" aria-label="Select"><div class="meta"><input class="caption" placeholder="Add a caption…" aria-label="Caption"><div class="sub"></div><div class="actions"><button data-a="copy" title="Copy back to clipboard">Copy</button><button data-a="pin" title="Pin">📌</button><button data-a="download" title="Download">↓</button><button data-a="text" title="Open in Split / Merge">✂</button><button data-a="shelf" class="desk-only" title="Add to the current shelf">⇪ Shelf</button><button data-a="delete" title="Delete">✕</button></div></div>`;
   el.prepend(preview);
   el.querySelector('.check').onchange = e => { e.target.checked ? state.selected.add(item.id) : state.selected.delete(item.id); render(); };
   const caption = el.querySelector('.caption');
@@ -208,6 +231,13 @@ function open(item) {
 const actions = {
   async copy(item) {
     try {
+      if (desk) {
+        if (item.kind === 'image') await desk.invoke('tuk:copy', { png: new Uint8Array(await (item.mime === 'image/png' ? item.blob : await toPng(item.blob)).arrayBuffer()) });
+        else if (item.text != null) await desk.invoke('tuk:copy', item.kind === 'html' ? { html: item.text, text: htmlToText(item.text) } : { text: item.text });
+        else if (item.path) { await desk.invoke('tuk:copy', { path: item.path }); return toast('File path copied'); }
+        else return actions.download(item);
+        return toast('Copied to clipboard');
+      }
       if (item.text != null) {
         if (item.kind === 'html' && window.ClipboardItem) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([item.text], { type: 'text/html' }), 'text/plain': new Blob([htmlToText(item.text)], { type: 'text/plain' }) })]);
         else await navigator.clipboard.writeText(item.text);
@@ -223,6 +253,11 @@ const actions = {
   download(item) { const blob = itemBlob(item); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: fileName(item) }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
   text(item) { setView('text'); setText(item.kind === 'html' ? htmlToText(item.text) : item.text, true); },
   async delete(item) { await removeItems([item.id]); },
+  async shelf(item) {
+    if (!desk) return;
+    const payload = item.text != null ? { text: item.kind === 'html' ? htmlToText(item.text) : item.text } : { path: item.path, name: fileName(item), data: new Uint8Array(await item.blob.arrayBuffer()) };
+    try { const name = await desk.invoke('tuk:to-shelf', payload); toast(`Added to ${name}`); } catch (err) { toast('Could not add to shelf: ' + err.message); }
+  },
 };
 async function removeItems(ids) {
   const removed = state.items.filter(i => ids.includes(i.id));
@@ -326,8 +361,12 @@ document.addEventListener('keydown', e => {
 
 // Auto-paste: read the clipboard each time the page regains focus (browsers only allow reads while focused).
 const autoBox = $('#auto-paste');
-autoBox.onchange = () => { try { localStorage.setItem('tuk-auto', autoBox.checked ? '1' : ''); } catch (_) {} if (autoBox.checked) readClipboard(true); };
-const autoRead = () => { if (autoBox.checked && document.hasFocus() && document.visibilityState === 'visible') readClipboard(true); };
+autoBox.onchange = () => {
+  if (desk) return desk.invoke('tuk:auto', autoBox.checked);
+  try { localStorage.setItem('tuk-auto', autoBox.checked ? '1' : ''); } catch (_) {}
+  if (autoBox.checked) readClipboard(true);
+};
+const autoRead = () => { if (!desk && autoBox.checked && document.hasFocus() && document.visibilityState === 'visible') readClipboard(true); };
 addEventListener('focus', autoRead);
 document.addEventListener('visibilitychange', autoRead);
 setInterval(autoRead, 2000);
@@ -351,6 +390,13 @@ function toast(msg, actionLabel, action) {
   try { saved = { theme: localStorage.getItem('tuk-theme'), view: localStorage.getItem('tuk-view'), auto: localStorage.getItem('tuk-auto'), scale: localStorage.getItem('tuk-scale'), text: localStorage.getItem('tuk-text') }; } catch (_) {}
   applyTheme(saved.theme || 'dark');
   autoBox.checked = !!saved.auto;
+  if (desk) {
+    try { autoBox.checked = !!(await desk.invoke('tuk:info')).auto; } catch (_) {}
+    desk.on('tuk:clip', items => ingestNative(items, 'auto'));
+    desk.on('tuk:auto', on => { autoBox.checked = !!on; });
+    autoBox.parentElement.title = 'Collect everything you copy, even while this window is closed';
+  }
+  localize(new URLSearchParams(location.search).get('lang') || (navigator.language.startsWith('km') ? 'km' : 'en'));
   if (saved.scale) $('#scale').value = saved.scale;
   ta.value = saved.text || ''; updateTextUi();
   try { const stored = await dbAll(); const ids = new Set(state.items.map(i => i.id)); state.items = [...stored.filter(i => !ids.has(i.id)), ...state.items]; } catch (err) { toast('Storage unavailable: ' + err.message); }
@@ -358,3 +404,17 @@ function toast(msg, actionLabel, action) {
   setView(saved.view || 'shots');
   setInterval(() => state.view !== 'text' && render(), 60000);
 })();
+
+/* ---------- Khmer interface ---------- */
+function localize(lang) {
+  if (lang !== 'km') return;
+  document.documentElement.lang = 'km';
+  const km = { 'Shots': 'រូបថត', 'History': 'ប្រវត្តិ', 'Pinned': 'បានខ្ទាស់', 'Split / Merge': 'បំបែក / បញ្ចូល', 'Auto-paste': 'បិទភ្ជាប់ស្វ័យប្រវត្តិ',
+    'Capture screen': 'ថតអេក្រង់', 'Paste': 'បិទភ្ជាប់', 'Add files': 'បន្ថែមឯកសារ', 'Select all': 'ជ្រើសទាំងអស់', 'Export ZIP': 'នាំចេញ ZIP', 'Delete': 'លុប',
+    'Split → lines': 'បំបែក → បន្ទាត់', 'Merge lines →': 'បញ្ចូលបន្ទាត់ →', 'Sort': 'តម្រៀប', 'Reverse': 'បញ្ច្រាស', '↶ Undo': '↶ មិនធ្វើវិញ', '↷ Redo': '↷ ធ្វើវិញ',
+    'Copy': 'ចម្លង', 'Keep': 'ទុក', 'All types': 'គ្រប់ប្រភេទ', 'Paste anything to keep it.': 'បិទភ្ជាប់អ្វីក៏បាន ដើម្បីទុកវា។' };
+  const walk = node => { for (const n of node.childNodes) { if (n.nodeType === 3) { const t = n.textContent.trim(); if (km[t]) n.textContent = n.textContent.replace(t, km[t]); } else if (n.nodeType === 1 && !/SCRIPT|STYLE|TEXTAREA/.test(n.tagName)) walk(n); } };
+  walk(document.body);
+  $('#search').placeholder = 'ស្វែងរកចំណងជើង អត្ថបទ ឈ្មោះឯកសារ…  ( / )';
+  $('#text').placeholder = 'បិទភ្ជាប់ ឬវាយអត្ថបទនៅទីនេះ រួចបំបែក ឬបញ្ចូលបន្ទាត់។';
+}

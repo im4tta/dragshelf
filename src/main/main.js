@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const {
-  app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, nativeTheme, shell, systemPreferences, clipboard, dialog, net
+  app, BrowserWindow, Tray, Menu, ipcMain, screen, globalShortcut, nativeImage, nativeTheme, shell, systemPreferences, clipboard, dialog, net, desktopCapturer
 } = require('electron');
 
 const { Store } = require('./store');
@@ -12,6 +12,8 @@ const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
 const I18N = require('../shared/i18n');
 const { Delivery } = require('./delivery');
+const { ClipWatcher } = require('./tuk');
+let tukWin = null, clipWatch = null, quitting = false;
 let updates;
 function language() { return I18N.resolveLanguage(store && store.settings.language, app.getLocale()); }
 function tr(key, values) { return I18N.t(language(), key, values); }
@@ -120,6 +122,79 @@ function openDelivery() {
   deliveryWin.loadFile(R('delivery.html'), { query: windowQuery() });
   deliveryWin.once('ready-to-show', () => { shelfWin.hide(); deliveryWin.show(); deliveryWin.focus(); });
   deliveryWin.on('closed', () => { deliveryWin = null; if (deliveryJobs) deliveryJobs.cancel(); });
+}
+
+// ───────────────────────────────────────────────────────── Tuk: clipboard history + screenshots
+function openTuk(show = true) {
+  if (tukWin && !tukWin.isDestroyed()) { if (show) { tukWin.show(); tukWin.focus(); } return tukWin; }
+  const wa = workAreaAt(), width = Math.min(1100, wa.width - 24), height = Math.min(760, wa.height - 36);
+  tukWin = new BrowserWindow({ width, height, minWidth: Math.min(420, width), minHeight: Math.min(380, height),
+    x: Math.round(wa.x + (wa.width - width) / 2), y: Math.round(wa.y + (wa.height - height) / 2),
+    show: false, icon: B('icon.png'), title: tr('tukMenu'), backgroundColor: '#161714', autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
+  tukWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  tukWin.webContents.on('will-navigate', event => event.preventDefault());
+  tukWin.loadFile(R('tuk/index.html'), { query: { ...windowQuery(), desktop: '1' } });
+  if (show) tukWin.once('ready-to-show', () => { tukWin.show(); tukWin.focus(); });
+  // Closing only hides the window so clipboard collection keeps running in the background.
+  tukWin.on('close', event => { if (!quitting) { event.preventDefault(); tukWin.hide(); } });
+  tukWin.on('closed', () => { tukWin = null; });
+  return tukWin;
+}
+function sendTukItems(items) {
+  const win = openTuk(false);
+  const deliver = () => win.webContents.send('tuk:clip', items);
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', deliver); else deliver();
+}
+function setTukAuto(on) {
+  store.setSetting('tukAuto', !!on);
+  if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onItems: sendTukItems });
+  if (on) clipWatch.start(); else clipWatch.stop();
+  if (tukWin && !tukWin.isDestroyed()) tukWin.webContents.send('tuk:auto', !!on);
+}
+async function captureScreen(scale) {
+  scale = Math.min(4, Math.max(1, Number(scale) || 1));
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const hidden = [tukWin, shelfWin].filter(w => w && !w.isDestroyed() && w.isVisible());
+  hidden.forEach(w => w.hide());
+  await new Promise(r => setTimeout(r, 250)); // let the windows disappear before grabbing the screen
+  try {
+    // Native pixels are size × scaleFactor; larger multiples are rendered up to scale × the logical size.
+    const factor = Math.max(display.scaleFactor, scale);
+    const thumbnailSize = { width: Math.round(display.size.width * factor), height: Math.round(display.size.height * factor) };
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize });
+    const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[0];
+    if (!source || source.thumbnail.isEmpty()) throw new Error(IS_MAC ? 'Screen Recording permission is needed (System Settings → Privacy & Security)' : 'No screen available');
+    let image = source.thumbnail;
+    const target = { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) };
+    if (image.getSize().width < target.width) image = image.resize({ ...target, quality: 'best' });
+    const size = image.getSize();
+    return { data: image.toPNG(), width: size.width, height: size.height };
+  } finally { hidden.forEach(w => w === shelfWin ? w.showInactive() : w.show()); }
+}
+function wireTukIpc() {
+  ipcMain.handle('tuk:info', () => ({ auto: !!store.settings.tukAuto, platform: process.platform }));
+  ipcMain.handle('tuk:auto', (e, on) => { setTukAuto(on); return !!on; });
+  ipcMain.handle('tuk:read', () => (clipWatch || new ClipWatcher({ clipboard, onItems() {} })).readNow());
+  ipcMain.handle('tuk:capture', (e, scale) => captureScreen(scale));
+  ipcMain.handle('tuk:copy', async (e, payload = {}) => {
+    const { ClipboardItem } = require('electron');
+    if (payload.png) await clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(payload.png)], { type: 'image/png' }) })]);
+    else if (payload.html) await clipboard.write([new ClipboardItem({ 'text/html': String(payload.html), 'text/plain': String(payload.text || '') })]);
+    else await clipboard.writeText(String(payload.path || payload.text || ''));
+    if (clipWatch) await clipWatch.resync();
+    return true;
+  });
+  ipcMain.handle('tuk:to-shelf', (e, payload = {}) => {
+    let p;
+    if (payload.path && fs.existsSync(payload.path)) p = payload.path;
+    else if (payload.data) p = stash.saveBlob(String(payload.name || 'tuk-item'), Buffer.from(payload.data));
+    else if (/^https?:\/\/\S+$/i.test(String(payload.text || '').trim())) p = stash.saveUrl(payload.text.trim());
+    else p = stash.saveText(String(payload.text || ''));
+    store.addPaths(store.active, [p]); pushState();
+    return store.cur.name;
+  });
+  ipcMain.handle('tuk:reveal', (e, p) => { if (typeof p === 'string' && fs.existsSync(p)) shell.showItemInFolder(p); });
 }
 
 // ───────────────────────────────────────────────────────── shelf window
@@ -277,6 +352,8 @@ function buildTrayMenu() {
     { label: tr(shelfWin && shelfWin.isVisible() ? 'hideShelf' : 'showShelf'), accelerator: undefined, sublabel: accelLabel(st.hotkey), click: () => toggleShelf(true) },
     { label: tr('phoneMenu'), type: 'checkbox', checked: !!(phoneWin && !phoneWin.isDestroyed()), click: openPhone },
     { label: tr('prepareDelivery'), click: openDelivery },
+    { label: tr('tukMenu'), click: () => openTuk(true) },
+    { label: tr('tukAuto'), type: 'checkbox', checked: !!st.tukAuto, click: () => setTukAuto(!st.tukAuto) },
     { type: 'separator' },
     { label: tr('theme'), submenu: [['auto', IS_MAC ? 'macTheme' : 'systemTheme'], ['light', 'light'], ['dark', 'dark']].map(([v, key]) => ({ label: tr(key), type: 'radio', checked: st.theme === v, click: set('theme', v) })) },
     { label: tr('accent'), submenu: accentNames().map(([v, l]) => ({ label: l, type: 'radio', checked: st.accent === v, click: set('accent', v) })) },
@@ -398,6 +475,7 @@ function wireIpc() {
 app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
+  quitting = true; if (clipWatch) clipWatch.stop();
   if (updates) updates.stop();
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
@@ -419,9 +497,10 @@ app.whenReady().then(() => {
   updateLanguage();
 
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
-  wireIpc();
+  wireIpc(); wireTukIpc();
   deliveryJobs = require('./delivery-ipc')({ window: () => deliveryWin, shelfId: () => deliveryShelfId, setShelfId: value => { deliveryShelfId = value; }, store: () => store, service: () => delivery, state: buildState, language, t: tr, push: pushState, test: () => TEST });
   createShelfWindow();
+  if (store.settings.tukAuto) setTukAuto(true); // keeps collecting in the background; the Tuk window opens on demand
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) {
     updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
@@ -442,7 +521,7 @@ app.whenReady().then(() => {
       shelfWin: () => shelfWin, phoneWin: () => phoneWin, guideWin: () => guideWin, keyWin: () => keyWin,
       showShelf: () => { placeCard(80, 60); shelfWin.showInactive(); pushState(); },
       openPhone, openGuide, openShortcutWindow, pushState, store: () => store,
-      openDelivery, deliveryWin: () => deliveryWin, delivery: () => delivery,
+      openDelivery, deliveryWin: () => deliveryWin, openTuk, tukWin: () => tukWin, setTukAuto, clipWatch: () => clipWatch,  delivery: () => delivery,
       imageSize: file => nativeImage.createFromPath(file).getSize(),
       writeTestImage: (source, destination, width, height) => fs.writeFileSync(destination, nativeImage.createFromPath(source).resize({ width, height }).toPNG())
     };

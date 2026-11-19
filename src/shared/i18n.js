@@ -99,6 +99,8 @@
     ['diskError', 'Could not save the file. Check available disk space.', 'មិនអាចរក្សាទុកឯកសារបានទេ។ សូមពិនិត្យទំហំផ្ទុកដែលនៅសល់។'],
     ['incomplete', 'Upload was interrupted. Please try again.', 'ការផ្ញើត្រូវបានរំខាន។ សូមសាកល្បងម្ដងទៀត។'],
     ['notFound', 'Transfer link not found or expired.', 'រកមិនឃើញតំណផ្ទេរ ឬតំណនេះផុតសុពលភាព។'],
+    ['tukMenu', 'Tuk — clipboard & screenshots…', 'ទុក — ក្ដារតម្បៀតខ្ទាស់ និងរូបថតអេក្រង់…'],
+    ['tukAuto', 'Collect copied items automatically', 'ប្រមូលធាតុដែលបានចម្លងដោយស្វ័យប្រវត្តិ'],
     ['prepareDelivery', 'Prepare a delivery', 'រៀបចំឯកសារសម្រាប់ប្រគល់'],
     ['deliverySubtitle', 'Check, prepare and create a client-ready folder.', 'ពិនិត្យ រៀបចំ និងបង្កើតថតឯកសារសម្រាប់ប្រគល់។'],
     ['deliveryContents', 'Files included', 'ឯកសារដែលបានបញ្ចូល'],

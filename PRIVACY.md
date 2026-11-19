@@ -14,6 +14,10 @@ The Windows app stores its data under your Windows user profile. The packaged Mi
 
 The Windows app observes mouse movement and button state to detect a drag-and-shake gesture. It registers a global shortcut and reads shortcut keys while you configure that shortcut. It uses the active app's executable name for app exclusions. It does not record your typing history or send these interactions to the developer.
 
+## Tuk clipboard history and screenshots
+
+Tuk keeps clipboard items, screenshots and their captions in local browser storage (IndexedDB) on your computer; nothing is uploaded. When "Collect copied items automatically" is on, Drag Shelf reads the system clipboard about once a second, including while the Tuk window is closed, and saves each new text, link, image or copied file (files up to 50 MB are copied in; larger files and folders are kept as a path). It is off by default; turn it off in the tray/menu-bar menu or in Tuk. Delete items in Tuk to remove them. Screen capture happens only when you press Capture screen; on macOS it needs Screen Recording permission.
+
 ## Optional phone transfers
 
 When you open "Photos from phone", Drag Shelf starts a temporary local-network HTTP server with a random secret URL. A phone using that URL can upload files directly to your computer. The app processes the network connection's IP address to restrict connections to private/local addresses; it does not send it to the developer or use it for analytics. Files are stored locally. Closing the transfer window stops accepting transfers. Transfers use HTTP, so use this feature only on a trusted private network and keep its URL private.

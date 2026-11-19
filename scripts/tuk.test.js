@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const zlib = require('node:zlib');
-const T = require('../website/tuk/core.js');
+const T = require('../src/renderer/tuk/core.js');
 
 test('crc32 matches zlib', () => {
   const data = Buffer.from('Tuk ទុក paste capture keep');
@@ -56,4 +56,40 @@ test('undo/redo history', () => {
   assert.strictEqual(h.redo('one'), 'two');
   h.record('x');
   assert.strictEqual(h.canRedo, false);
+});
+
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const M = require('../src/main/tuk.js');
+function fakeClipboard(state) {
+  const entry = values => ({ types: Object.keys(values), getType: async t => new Blob([values[t]]) });
+  return { read: async () => (state.entries || []).map(entry) };
+}
+
+test('clipboard file paths on each platform', () => {
+  assert.deepStrictEqual(M.parseUriList('# c\nfile:///tmp/a%20b.png\nhttps://x'), ['/tmp/a b.png']);
+  assert.deepStrictEqual(M.parsePlistPaths('<array><string>/Users/me/A &amp; B.pdf</string><string>/x.txt</string></array>'), ['/Users/me/A & B.pdf', '/x.txt']);
+  assert.deepStrictEqual(M.parseWindowsFileName(Buffer.from('C:\\ទុក\\a.docx\0junk', 'utf16le')), ['C:\\ទុក\\a.docx']);
+  assert.strictEqual(M.mimeFor('report.PDF'), 'application/pdf');
+});
+
+test('watcher collects only new clipboard content, files first', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuk-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'note.pdf'); fs.writeFileSync(file, 'pdf');
+  const state = { entries: [{ 'text/plain': 'before' }] }, got = [];
+  const w = new M.ClipWatcher({ clipboard: fakeClipboard(state), onItems: items => got.push(items) });
+  await w.start(); w.stop();
+  await w.tick(); assert.strictEqual(got.length, 0, 'existing clipboard is not collected');
+  state.entries = [{ 'text/plain': 'hello' }]; await w.tick(); await w.tick();
+  assert.deepStrictEqual(got.map(g => g[0].text), ['hello']);
+  state.entries = [{ 'text/plain': 'b', 'text/html': '<b>b</b>' }]; await w.tick();
+  assert.deepStrictEqual(got[1][0], { type: 'html', text: '<b>b</b>' });
+  state.entries = [{ 'electron application/osclipboard;format="public.file-url"': 'file://' + file }, { 'electron application/osclipboard;format="public.file-url"': 'file://' + dir }]; await w.tick();
+  const files = got[2];
+  assert.strictEqual(files[0].type, 'file'); assert.strictEqual(files[0].mime, 'application/pdf'); assert.strictEqual(files[0].data.toString(), 'pdf');
+  assert.strictEqual(files[1].type, 'text'); assert.strictEqual(files[1].path, dir);
+  state.entries = [{ 'electron application/osclipboard;format="FileNameW"': Buffer.from(file + '\0', 'utf16le') }]; await w.tick();
+  assert.strictEqual(got[3][0].path, file);
+  state.entries = [{ 'image/png': Buffer.from('png-bytes') }]; await w.tick(); await w.tick();
+  assert.strictEqual(got.length, 5); assert.strictEqual(got[4][0].mime, 'image/png'); assert.strictEqual(got[4][0].data.toString(), 'png-bytes');
+  state.entries = [{ 'text/plain': 'mine' }]; await w.resync(); await w.tick(); assert.strictEqual(got.length, 5);
 });

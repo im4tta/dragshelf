@@ -1,4 +1,4 @@
-@font-face{font-family:Khmer;src:url(../assets/NotoSansKhmer.ttf);font-display:swap}[hidden]{display:none!important}
+@font-face{font-family:Khmer;src:url(../fonts/NotoSansKhmer.ttf);font-display:swap}[hidden]{display:none!important}
 :root,:root[data-theme=dark]{--bg:#161714;--panel:#1f201c;--card:#262722;--line:#34362f;--text:#ecebe0;--muted:#9c9b8e;--accent:#f4c430;--accent-ink:#1c1d1a;--danger:#ff6b5a;--focus:#f4c430;color-scheme:dark}
 :root[data-theme=light]{--bg:#f7f6ed;--panel:#efeee2;--card:#fff;--line:#dcdacb;--text:#242520;--muted:#6c6b60;--accent:#e2ad00;--accent-ink:#1c1d1a;--danger:#c0392b;--focus:#a15b00;color-scheme:light}
 *{box-sizing:border-box}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Khmer,sans-serif;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
@@ -23,16 +23,16 @@ input[type=search],input:not([type]),textarea{background:var(--card);border:1px 
 main{padding:16px 20px 40px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}.toolbar input[type=search]{flex:1 1 240px}.capture{display:flex;gap:4px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
-.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;animation:pop .25s ease;transition:border-color .15s,box-shadow .15s}
+.card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,box-shadow .15s}
 .card:hover{border-color:var(--muted);box-shadow:0 6px 20px #0003}.card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-@keyframes pop{from{opacity:0;transform:scale(.96)}}
+.card.enter{animation:pop .25s ease}@keyframes pop{from{opacity:0;transform:scale(.96)}}
 .preview{height:150px;background:var(--panel);display:grid;place-items:center;overflow:hidden;cursor:zoom-in}
 .preview img{width:100%;height:100%;object-fit:cover}.preview.text{cursor:pointer;place-items:start;padding:12px;font-size:12.5px;white-space:pre-wrap;word-break:break-word;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace}
 .preview .glyph{font-size:30px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .meta{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .caption{border:0;background:transparent;padding:2px 0;width:100%;font-weight:500}.caption:focus{outline:none;border-bottom:1px solid var(--accent)}
 .sub{display:flex;gap:6px;color:var(--muted);font-size:12px;align-items:center;flex-wrap:wrap}.tag{padding:0 6px;border-radius:6px;background:var(--panel);border:1px solid var(--line)}
-.actions{display:flex;gap:4px}.actions button{padding:4px 8px;font-size:12px}.actions .on{color:var(--accent);border-color:var(--accent)}
+.actions{display:flex;gap:4px;flex-wrap:wrap}.actions button{padding:4px 8px;font-size:12px}.actions .on{color:var(--accent);border-color:var(--accent)}
 .check{position:absolute;top:8px;left:8px;width:22px;height:22px;accent-color:var(--accent);opacity:.0;transition:opacity .15s}.card:hover .check,.card.selected .check,.check:focus-visible{opacity:1}
 .empty{text-align:center;padding:70px 20px;color:var(--muted)}.empty h2{color:var(--text)}.drop-art{display:inline-grid;place-items:center;width:84px;height:84px;border-radius:22px;border:2px dashed var(--line);font-size:22px;font-weight:700}
 kbd{background:var(--card);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:12px}
@@ -48,3 +48,4 @@ dialog{border:0;padding:0;background:transparent;max-width:96vw;max-height:94vh}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,30px);opacity:0;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;transition:.25s;pointer-events:none;z-index:30;max-width:90vw}.toast.show{opacity:1;transform:translate(-50%,0)}
 @media (max-width:640px){.top,main{padding-inline:16px}.top-actions{margin-left:0}.tabs{overflow-x:auto;max-width:100%}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.desk-only{display:none}.desktop .desk-only{display:inline-block}
