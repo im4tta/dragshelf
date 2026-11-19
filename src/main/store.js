@@ -14,6 +14,11 @@ const DEFAULT_SETTINGS = {
   guideDone: false,
   autoPaste: false,         // new clipboard contents land on the active shelf
   captureScale: 2,          // screenshot resolution multiple (1–4×)
+  ocrAuto: true,            // read text in new screenshots once the OCR models are installed
+  ocrMode: 'best',          // best | fast
+  quickPasteKey: process.platform === 'darwin' ? 'Alt+Shift+V' : 'Control+Shift+V',
+  skipConcealed: true,      // auto-paste ignores copies marked secret (password managers)
+  historyDays: 0,           // forget unpinned history after N days (0 = keep)
   asked: false              // already asked for the Accessibility permission once
 };
 
@@ -24,6 +29,9 @@ class Store {
     this.settingsFile = path.join(dir, 'settings.json');
     this.historyFile = path.join(dir, 'history.json');
     this.history = [];          // everything that ever landed on a shelf, newest first: { p, added, pinned }
+    this.ocrFile = path.join(dir, 'ocr.json');
+    this.ocr = {};              // recognised text per image: path → { m: mtime, t: text }
+    this.rules = [];            // smart shelves: [{ id, kind: 'ext' | 'name', value, shelf: shelfId }]
     this.undoStack = []; this.redoStack = [];
     this.shelves = [];
     this.defaultShelfName = defaultShelfName;
@@ -48,6 +56,9 @@ class Store {
     if (!this.shelves.length) this.shelves = [{ id: randomUUID(), name: this.defaultShelfName, delivery: null, items: [] }];
     try { Object.assign(this.settings, JSON.parse(fs.readFileSync(this.settingsFile, 'utf8'))); } catch (_) { /* defaults */ }
     try { this.history = (JSON.parse(fs.readFileSync(this.historyFile, 'utf8')).items || []).filter(h => h && typeof h.p === 'string').map(h => ({ p: h.p, added: h.added || Date.now(), pinned: !!h.pinned })); } catch (_) { /* no history yet */ }
+    try { this.ocr = JSON.parse(fs.readFileSync(this.ocrFile, 'utf8')).items || {}; } catch (_) { /* no OCR yet */ }
+    try { this.rules = (JSON.parse(fs.readFileSync(this.file, 'utf8')).rules || []).filter(r => r && r.value && r.shelf); } catch (_) { /* no rules */ }
+    this.expireHistory();
   }
 
   _write(file, data) {
@@ -62,9 +73,10 @@ class Store {
   flush() {
     clearTimeout(this._t);
     try {
-      this._write(this.file, { version: 1, active: this.active, shelves: this.shelves });
+      this._write(this.file, { version: 1, active: this.active, shelves: this.shelves, rules: this.rules });
       this._write(this.settingsFile, this.settings);
       this._write(this.historyFile, { version: 1, items: this.history });
+      this._write(this.ocrFile, { version: 1, items: this.ocr });
     } catch (e) { console.error('save failed', e); }
   }
 
@@ -127,6 +139,55 @@ class Store {
   togglePin(p) { const h = this.history.find(x => x.p === p); if (h) { h.pinned = !h.pinned; this.save(); } return !!(h && h.pinned); }
   forget(paths) { const set = new Set(paths); this.history = this.history.filter(h => !set.has(h.p)); this.save(); }
   clearHistory() { this.history = this.history.filter(h => h.pinned); this.save(); }
+
+  expireHistory(now = Date.now()) {
+    const days = Number(this.settings.historyDays) || 0; if (!days) return;
+    const cutoff = now - days * 864e5;
+    this.history = this.history.filter(h => h.pinned || h.added >= cutoff);
+  }
+
+  // ── OCR text cache
+  ocrText(p, mtime) { const o = this.ocr[p]; return o && o.m === mtime ? o.t : null; }
+  setOcrText(p, mtime, text) { this.ocr[p] = { m: mtime, t: String(text || '') }; this.save(); }
+  ocrOf(p) { return this.ocr[p] ? this.ocr[p].t : ''; }
+
+  // ── smart shelves: the first matching rule decides where a new item lands
+  ruleTarget(p) {
+    const ext = path.extname(p).slice(1).toLowerCase(), name = path.basename(p).toLowerCase();
+    for (const r of this.rules) {
+      const values = String(r.value).toLowerCase().split(/[,\s]+/).filter(Boolean).map(v => v.replace(/^\./, ''));
+      const hit = r.kind === 'ext' ? values.includes(ext) : values.some(v => name.includes(v));
+      const shelf = this.shelves.findIndex(s => s.id === r.shelf);
+      if (hit && shelf >= 0) return shelf;
+    }
+    return -1;
+  }
+  addRouted(paths, fallback = this.active) {
+    const groups = new Map();
+    for (const p of paths) { const t = this.ruleTarget(p); const i = t >= 0 ? t : fallback; groups.set(i, [...(groups.get(i) || []), p]); }
+    let n = 0; for (const [i, ps] of groups) n += this.addPaths(i, ps);
+    return { added: n, shelves: [...groups.keys()] };
+  }
+  setRules(rules) {
+    this.rules = (Array.isArray(rules) ? rules : []).filter(r => r && ['ext', 'name'].includes(r.kind) && String(r.value || '').trim() && this.shelves.some(s => s.id === r.shelf))
+      .map(r => ({ id: r.id || randomUUID(), kind: r.kind, value: String(r.value).trim().slice(0, 200), shelf: r.shelf }));
+    this.save();
+  }
+
+  // ── backup: everything in one JSON document
+  exportBackup() { return { app: 'Drag Shelf', version: 1, exported: new Date().toISOString(), active: this.active, shelves: this.shelves, rules: this.rules, history: this.history, settings: this.settings }; }
+  importBackup(j) {
+    if (!j || j.app !== 'Drag Shelf' || !Array.isArray(j.shelves)) throw new Error('Not a Drag Shelf backup');
+    this.checkpoint();
+    this.shelves = j.shelves.map(s => ({ id: typeof s.id === 'string' ? s.id : randomUUID(), name: String(s.name || 'Shelf'), delivery: s.delivery && typeof s.delivery === 'object' ? s.delivery : null, items: (s.items || []).filter(i => i && i.p).map(i => ({ p: String(i.p), done: !!i.done, added: i.added || Date.now() })) }));
+    if (!this.shelves.length) this.shelves = [{ id: randomUUID(), name: this.defaultShelfName, delivery: null, items: [] }];
+    this.active = Math.max(0, Math.min(j.active | 0, this.shelves.length - 1));
+    this.history = (j.history || []).filter(h => h && typeof h.p === 'string').map(h => ({ p: h.p, added: h.added || Date.now(), pinned: !!h.pinned }));
+    this.rules = []; this.setRules(j.rules || []);
+    const keep = ['language', 'theme', 'accent', 'strict', 'moveOnDragOut', 'captureScale', 'ocrAuto', 'ocrMode', 'skipConcealed', 'historyDays', 'autoPaste'];
+    for (const [k, v] of Object.entries(j.settings || {})) if (keep.includes(k)) this.settings[k] = v;
+    this.save();
+  }
 
   // ── undo / redo for shelf changes. checkpoint() is called before every change that should be undoable.
   _snap() { return JSON.stringify({ active: this.active, shelves: this.shelves }); }

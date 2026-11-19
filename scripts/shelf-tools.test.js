@@ -89,3 +89,83 @@ test('auto-paste reports only new copies: files, images and text', async () => {
   state.entries = [{ 'text/html': '<p>only <b>html</b></p>' }]; await w.tick(); assert.equal(got[4].text.trim(), 'only html');
   state.entries = [{ 'text/plain': 'written by Drag Shelf' }]; await w.resync(); await w.tick(); assert.equal(got.length, 5);
 });
+
+test('smart text detection and snippet placeholders', () => {
+  assert.deepEqual(TextOps.detect('#f5c63a'), { kind: 'color', value: '#f5c63a' });
+  assert.deepEqual(TextOps.detect('rgb(1, 2, 3)'), { kind: 'color', value: 'rgb(1, 2, 3)' });
+  assert.equal(TextOps.detect('https://x.dev/a?b=1').kind, 'link');
+  assert.equal(TextOps.detect('hello@example.com').kind, 'email');
+  assert.deepEqual(TextOps.detect('+855 12 345 678'), { kind: 'phone', value: '+85512345678' });
+  assert.equal(TextOps.detect('{"a": [1]}').kind, 'json');
+  assert.equal(TextOps.detect('const a = 1;\nreturn a;').kind, 'code');
+  assert.equal(TextOps.detect('សួស្តី').kind, 'text');
+  assert.equal(TextOps.detect('2026').kind, 'text');
+  const now = new Date(2026, 10, 9, 8, 5);
+  assert.equal(TextOps.expand('{date} {time} {datetime} {year} {clipboard} {other}', { now, clipboard: 'X' }), '2026-11-09 08:05 2026-11-09 08:05 2026 X {other}');
+});
+
+test('smart shelves route new items by type or name', t => {
+  const { store } = tempStore(t);
+  store.newShelf(); store.newShelf();
+  const [, pdfs, shots] = store.shelves.map(s => s.id);
+  store.setRules([{ kind: 'ext', value: '.pdf, docx', shelf: pdfs }, { kind: 'name', value: 'screenshot', shelf: shots }, { kind: 'ext', value: 'png', shelf: 'missing-shelf' }, { kind: 'bad', value: 'x', shelf: pdfs }]);
+  assert.equal(store.rules.length, 2, 'invalid rules are dropped');
+  const r = store.addRouted(['/a/Brief.PDF', '/a/Screenshot 1.png', '/a/notes.txt', '/a/spec.docx']);
+  assert.equal(r.added, 4);
+  assert.deepEqual(store.shelves.map(s => s.items.map(i => i.p)), [['/a/notes.txt'], ['/a/Brief.PDF', '/a/spec.docx'], ['/a/Screenshot 1.png']]);
+});
+
+test('history expiry keeps pins; OCR text cache follows file changes', t => {
+  const { store } = tempStore(t);
+  store.addPaths(0, ['/old', '/pinned-old', '/new']);
+  store.history.find(h => h.p === '/old').added = Date.now() - 10 * 864e5;
+  Object.assign(store.history.find(h => h.p === '/pinned-old'), { added: Date.now() - 10 * 864e5, pinned: true });
+  store.setSetting('historyDays', 7); store.expireHistory();
+  assert.deepEqual(store.history.map(h => h.p).sort(), ['/new', '/pinned-old']);
+  store.setOcrText('/img.png', 111, 'សួស្តី');
+  assert.equal(store.ocrText('/img.png', 111), 'សួស្តី');
+  assert.equal(store.ocrText('/img.png', 222), null, 'a changed file is read again');
+  assert.equal(store.ocrOf('/img.png'), 'សួស្តី');
+});
+
+test('backup round trip restores shelves, history, rules and safe settings', t => {
+  const { store } = tempStore(t);
+  store.newShelf(); store.renameShelf(1, 'ធ្នើ'); store.addPaths(1, ['/x/a.pdf']); store.togglePin('/x/a.pdf');
+  store.setRules([{ kind: 'ext', value: 'pdf', shelf: store.shelves[1].id }]);
+  store.setSetting('captureScale', 4);
+  const backup = JSON.parse(JSON.stringify(store.exportBackup()));
+  backup.settings.hotkey = 'Ctrl+Q'; // not restored: shortcuts belong to this computer
+  const { store: other } = tempStore(t);
+  other.importBackup(backup);
+  assert.deepEqual(other.shelves.map(s => [s.name, s.items.map(i => i.p)]), [['Shelf 1', []], ['ធ្នើ', ['/x/a.pdf']]]);
+  assert.equal(other.historyView()[0].pinned, true);
+  assert.equal(other.rules.length, 1); assert.equal(other.settings.captureScale, 4); assert.notEqual(other.settings.hotkey, 'Ctrl+Q');
+  assert.ok(other.undo(), 'restoring can be undone');
+  assert.throws(() => other.importBackup({ app: 'Other' }), /Not a Drag Shelf backup/);
+});
+
+test('auto-paste ignores copies marked secret unless told otherwise', async () => {
+  const secret = { entries: [{ 'text/plain': 'hunter2', 'electron application/osclipboard;format="org.nspasteboard.ConcealedType"': '' }] };
+  assert.equal((await C.readClipboard(fakeClipboard(secret))).kind, '');
+  assert.equal((await C.readClipboard(fakeClipboard(secret), { skipConcealed: false })).text, 'hunter2');
+  const win = { entries: [{ 'text/plain': 'pw', 'electron application/osclipboard;format="ExcludeClipboardContentFromMonitorProcessing"': '' }] };
+  assert.equal((await C.readClipboard(fakeClipboard(win))).concealed, true);
+});
+
+test('OCR models are verified before use', async t => {
+  const M = require('../src/main/ocr-models');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ds-ocr-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  assert.equal(M.MODELS.length, 4); assert.ok(M.TOTAL_BYTES > 40e6 && M.TOTAL_BYTES < 60e6);
+  assert.ok(M.MODELS.every(m => /^https:\/\/(huggingface\.co\/muyleanging\/Chakkhu-OCR-Khmer-ONNX\/resolve\/7a2c283f|cdn\.jsdelivr\.net\/gh\/im4tta\/tools123@a50a636)/.test(m.url) && /^[0-9a-f]{64}$/.test(m.sha256)));
+  const bad = async () => ({ ok: true, body: (async function* () { yield Buffer.from('not a model'); })() });
+  await assert.rejects(M.download(dir, bad), /checksum mismatch/);
+  assert.equal(fs.readdirSync(dir).length, 0, 'nothing half-written is kept');
+  assert.equal(M.installed(dir), false);
+  await assert.rejects(M.download(dir, async () => ({ ok: false, status: 404 })), /HTTP 404/);
+});
+
+test('OCR line grouping keeps columns apart', () => {
+  const { lineSegments } = require('../src/ocr/engine');
+  const b = (x1, x2) => ({ x1, x2, y1: 0, y2: 20, classId: 1, score: 0.9 });
+  assert.deepEqual(lineSegments([b(50, 90), b(0, 40), b(200, 260)]).map(s => [s.x1, s.x2]), [[0, 90], [200, 260]]);
+});

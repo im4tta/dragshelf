@@ -18,9 +18,17 @@ The Windows app observes mouse movement and button state to detect a drag-and-sh
 
 When *Auto-paste copied items* is on (it is off by default), Drag Shelf reads the system clipboard about once a second and adds each new copy to the active shelf: copied files are referenced in place, and images, links and text are saved as local files. *Paste clipboard to shelf* reads the clipboard once. Screen captures happen only when you press the capture button; macOS asks for Screen Recording permission. A history of items added to shelves is stored locally in `history.json`; remove entries or clear it from the History panel. Nothing is uploaded.
 
+## Text recognition (OCR)
+
+Text in images is recognised on your computer; images are never uploaded. The first time you use OCR, Drag Shelf downloads its models (≈50 MB) from Hugging Face (huggingface.co) and jsDelivr (cdn.jsdelivr.net) and checks each file's SHA-256. Recognised text is stored locally in `ocr.json` so history can be searched by it. You can remove the models from the tray/menu-bar menu.
+
+## Quick paste
+
+The quick-paste shortcut opens a list of your history. Choosing an item copies it and, on Windows and macOS (with Accessibility permission), sends a single paste keystroke to the app you were using. No other keystrokes are sent or recorded.
+
 ## Optional phone transfers
 
-When you open "Photos from phone", Drag Shelf starts a temporary local-network HTTP server with a random secret URL. A phone using that URL can upload files directly to your computer. The app processes the network connection's IP address to restrict connections to private/local addresses; it does not send it to the developer or use it for analytics. Files are stored locally. Closing the transfer window stops accepting transfers. Transfers use HTTP, so use this feature only on a trusted private network and keep its URL private.
+When you open "Photos from phone", Drag Shelf starts a temporary local-network HTTP server with a random secret URL. A phone using that URL can upload files directly to your computer. The app processes the network connection's IP address to restrict connections to private/local addresses; it does not send it to the developer or use it for analytics. Files are stored locally. Closing the transfer window stops accepting transfers. Transfers use HTTP, so use this feature only on a trusted private network and keep its URL private. While it is open, the same page also offers the active shelf’s files for download to devices that have the URL.
 
 ## No developer-operated data collection
 

@@ -1,0 +1,24 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111; color: var(--text); font-family: var(--font), "Noto Sans Khmer"; }
+#stage { position: absolute; inset: 0; display: grid; place-items: center; cursor: crosshair; }
+body.markup #stage { inset: 0 0 64px 0; background: var(--bg); }
+canvas { display: block; max-width: 100%; max-height: 100%; }
+#hint { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); background: rgba(20,20,18,.85); color: #f4f5ee; padding: 8px 14px; border-radius: 999px; font-size: 13px; pointer-events: none; }
+body.editing #hint { display: none; }
+#tools { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 16px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); z-index: 5; }
+#tools[hidden] { display: none; }
+.tool { min-width: 34px; height: 34px; border-radius: 10px; color: var(--text); display: grid; place-items: center; padding: 0 8px; font-size: 13px; font-weight: 600; }
+.tool:hover { background: var(--circle); }
+.tool[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.tool.primary { background: var(--accent); color: var(--accent-fg); }
+.tool:disabled { opacity: .35; }
+.tool svg { width: 18px; height: 18px; stroke-width: 2; }
+.tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+#picker { position: absolute; inset: 0; background: var(--bg); overflow: auto; padding: 18px; z-index: 6; }
+#picker[hidden] { display: none; }
+#picker header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 16px; }
+#windows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+#windows button { width: 100%; text-align: left; padding: 8px; border-radius: 14px; background: var(--bg-2); color: var(--text); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+#windows button:hover, #windows button:focus-visible { outline: 2px solid var(--accent); }
+#windows img { width: 100%; height: 130px; object-fit: contain; background: #000; border-radius: 8px; }
+#windows span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

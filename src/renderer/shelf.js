@@ -9,7 +9,8 @@ let hoverTab = -1, hoverTick = 0;
 let insertAt = null;          // list position under the pointer while dragging
 let justDone = null;          // path that was just ticked (animation)
 let renaming = false;
-let panel = null;              // 'history' | 'text' while a panel replaces the list
+let panel = null;
+let focusRow = 0, restoreFocus = false;   // keyboard position in the list              // 'history' | 'text' while a panel replaces the list
 
 // ───────────────────────────────────────────── state & render
 window.shelf.on('state', s => { S = s; render(); });
@@ -41,6 +42,7 @@ function render() {
   $('#undoBtn').disabled = !S.canUndo; $('#redoBtn').disabled = !S.canRedo;
   $('#autoPaste').checked = !!S.settings.autoPaste;
   if (panel === 'history') loadHistory();
+  if (panel === 'rules') renderRules();
 
   if (!renaming) {
     const tabs = $('#tabs'); tabs.innerHTML = '';
@@ -59,13 +61,16 @@ function render() {
   items.forEach((it, i) => {
     const li = document.createElement('li');
     li.className = 'row' + (it.done ? ' done' : '') + (it.missing ? ' missing' : ''); li.dataset.i = i; li.draggable = true; li.title = it.name;
+    li.tabIndex = i === focusRow ? 0 : -1; li.setAttribute('role', 'option'); li.setAttribute('aria-label', `${it.name}${it.done ? ' · ' + Locale.t('markNotDone') : ''}`);
     const sub = it.missing ? Locale.t('missingDetail') : [it.label, it.detail, when(it.added)].filter(Boolean).join(' · ');
     li.innerHTML = `<div class="tile">${it.thumb ? `<img src="${it.thumb}" alt="">` : window.glyph(it.kind)}</div>
-      <div class="meta"><div class="name">${esc(it.stem)}</div><div class="sub">${esc(sub)}</div></div>
+      <div class="meta"><div class="name">${esc(it.stem)}</div><div class="sub">${chip(it)}${esc(sub)}</div></div>
       <button class="check${justDone === it.path ? ' pop' : ''}" title="${Locale.t(it.done ? 'markNotDone' : 'markDone')}" aria-label="${Locale.t(it.done ? 'markNotDone' : 'markDone')}">${window.glyph('check')}</button>`;
     list.appendChild(li);
   });
   justDone = null;
+  list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', sh.name);
+  if (restoreFocus && list.children[focusRow]) { list.children[focusRow].focus(); restoreFocus = false; }
 
   const n = items.length, card = $('#card');
   card.classList.toggle('has-items', n > 0);
@@ -208,7 +213,7 @@ document.addEventListener('drop', async e => {
 
   // 2. Recover explicit native file URLs before treating unresolved Files as blobs.
   const { paths, blobs, uriList, text } = await DropFiles.resolve(snapshot);
-  if (paths.length) { await act('add', { shelf: target, paths }); if (intoActive && at != null) await act('move', { from: target, paths, to: target, at }); if (tabEl && !plus) await act('setActive', { index: target }); }
+  if (paths.length) { await act('add', { shelf: target, paths, route: intoActive }); if (intoActive && at != null) await act('move', { from: target, paths, to: target, at }); if (tabEl && !plus) await act('setActive', { index: target }); }
   for (const f of blobs) { const buf = await f.arrayBuffer(); await window.shelf.invoke('drop:blob', target, f.name, buf); }
   if (!paths.length && !blobs.length) {
     const url = (uriList.split(/\r?\n/).find(l => l && !l.startsWith('#')) || '').trim();
@@ -229,6 +234,85 @@ function burst(cx, cy) {
   }
 }
 
+// ───────────────────────────────────────────── smart rows: colours, links, e-mail, phone numbers, text in images
+function chip(it) {
+  const t = it.text;
+  if (t && t.kind === 'color') return `<span class="swatch" style="background:${esc(t.value)}"></span>`;
+  if (t && ['link', 'email', 'phone'].includes(t.kind)) return `<button class="chip" data-open="${esc(t.kind)}" data-value="${esc(t.value)}" title="${esc(Locale.t({ link: 'openLink', email: 'sendEmail', phone: 'callNumber' }[t.kind]))}">${esc(Locale.t({ link: 'openLink', email: 'sendEmail', phone: 'callNumber' }[t.kind]))}</button>`;
+  if (t && (t.kind === 'json' || t.kind === 'code')) return `<span class="chip quiet">${t.kind === 'json' ? 'JSON' : '</>'}</span>`;
+  if (it.ocr) return `<button class="chip" data-ocr="1" title="${esc(Locale.t('copyImageText'))}">${esc(Locale.t('hasText'))}</button>`;
+  return '';
+}
+$('#list').addEventListener('click', async e => {
+  const open = e.target.closest('[data-open]'), ocr = e.target.closest('[data-ocr]'); if (!open && !ocr) return;
+  e.stopPropagation();
+  if (open) return act('openValue', { kind: open.dataset.open, value: open.dataset.value });
+  const row = e.target.closest('.row'), r = await act('ocrCopy', { path: cur().items[+row.dataset.i].path });
+  toast(r && r.text ? Locale.t('copied') : r && r.error ? r.error : Locale.t('ocrNoText'));
+}, true);
+
+// ───────────────────────────────────────────── keyboard: arrows move, Space previews, Enter opens, ⌫ removes, D ticks
+$('#list').addEventListener('focusin', e => { const row = e.target.closest('.row'); if (row) focusRow = +row.dataset.i; });
+$('#list').addEventListener('keydown', e => {
+  const row = e.target.closest('.row'); if (!row || e.isComposing) return;
+  const i = +row.dataset.i, it = cur().items[i], rows = $('#list').children, move = to => { focusRow = Math.max(0, Math.min(rows.length - 1, to)); [...rows].forEach((r, k) => { r.tabIndex = k === focusRow ? 0 : -1; }); rows[focusRow].focus(); };
+  if (e.key === 'ArrowDown') { e.preventDefault(); move(i + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); move(i - 1); }
+  else if (e.key === 'Home') { e.preventDefault(); move(0); }
+  else if (e.key === 'End') { e.preventDefault(); move(rows.length - 1); }
+  else if (e.key === ' ') { e.preventDefault(); act('quickLook', { path: it.path }); }
+  else if (e.key === 'Enter') { e.preventDefault(); act('open', { path: it.path }); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); restoreFocus = true; focusRow = Math.min(i, rows.length - 2); act('remove', { paths: [it.path] }); }
+  else if (e.key.toLowerCase() === 'd' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); restoreFocus = true; act('toggleDone', { index: i }); }
+  else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); window.shelf.send('ctx:item', i); }
+});
+window.shelf.on('flash', message => { if (typeof message === 'string') toast(message); });
+
+// ───────────────────────────────────────────── command bar (⌘K / Ctrl+K)
+const COMMANDS = [
+  ['captureArea', () => act('capture', { mode: 'area' })], ['captureFull', () => act('capture', { mode: 'screen' })], ['captureWindow', () => act('capture', { mode: 'window' })],
+  ['captureDelay3', () => act('capture', { mode: 'area', delay: 3 })], ['pasteNow', () => pasteClipboard()], ['quickPaste', () => act('palette')],
+  ['history', () => openPanel('history')], ['newSnippet', () => newSnippet()], ['smartShelves', () => openPanel('rules')],
+  ['quickZip', async () => { const r = await act('zip'); toast(r && r.path ? Locale.t('zipSaved') : r && r.error || ''); }],
+  ['undo', () => act('undo')], ['redo', () => act('redo')], ['newShelf', () => act('newShelf')], ['prepareDelivery', () => act('delivery')],
+  ['rebuildDelivery', () => act('rebuildDelivery'), () => S.hasDelivery], ['phoneMenu', () => act('phone')],
+  ['ocrDownload', () => act('ocrSetup'), () => !S.ocrReady], ['backup', () => act('backup')], ['restore', () => act('restore')], ['autoPaste', () => act('autoPaste', { value: !S.settings.autoPaste })],
+];
+let cmdIndex = 0, cmdShown = [];
+function renderCommands() {
+  const q = $('#cmdInput').value.trim().toLowerCase();
+  cmdShown = COMMANDS.filter(([key, , when]) => (!when || when()) && (!q || Locale.t(key).toLowerCase().includes(q) || I18N.t('en', key).toLowerCase().includes(q)));
+  cmdIndex = Math.min(cmdIndex, Math.max(0, cmdShown.length - 1));
+  $('#cmdList').innerHTML = cmdShown.map(([key], i) => `<li role="option" id="cmd${i}" data-i="${i}" aria-selected="${i === cmdIndex}">${esc(Locale.t(key).replace(/…$/, ''))}</li>`).join('');
+  $('#cmdInput').setAttribute('aria-activedescendant', cmdShown.length ? 'cmd' + cmdIndex : '');
+  const sel = document.getElementById('cmd' + cmdIndex); if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+function runCommand(i) { const c = cmdShown[i]; if (!c) return; openPanel(null); c[1](); }
+$('#cmdInput').addEventListener('input', () => { cmdIndex = 0; renderCommands(); });
+$('#cmdInput').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); cmdIndex = Math.min(cmdIndex + 1, cmdShown.length - 1); renderCommands(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); cmdIndex = Math.max(cmdIndex - 1, 0); renderCommands(); }
+  else if (e.key === 'Enter') { e.preventDefault(); runCommand(cmdIndex); }
+  else if (e.key === 'Escape') { e.preventDefault(); openPanel(null); }
+});
+$('#cmdList').addEventListener('click', e => { const li = e.target.closest('li'); if (li) runCommand(+li.dataset.i); });
+function openCommands() { openPanel('commands'); $('#cmdInput').value = ''; cmdIndex = 0; renderCommands(); setTimeout(() => $('#cmdInput').focus(), 30); }
+
+// ───────────────────────────────────────────── snippets and smart shelves
+async function newSnippet() { const index = await act('newSnippet', { text: '{date} ' }); if (index >= 0) openText(index); }
+$('#newSnippet').onclick = newSnippet;
+function renderRules() {
+  const rules = S.rules || [], shelves = S.shelves;
+  $('#ruleList').innerHTML = rules.map((r, i) => `<li data-i="${i}"><span>${esc(Locale.t(r.kind === 'ext' ? 'ruleExt' : 'ruleName'))} <b>${esc(r.value)}</b> → ${esc((shelves.find(s => s.id === r.shelf) || {}).name || '?')}</span><button class="icon" data-del="${i}" title="${esc(Locale.t('remove'))}">${window.glyph('close')}</button></li>`).join('');
+  $('#ruleShelf').innerHTML = shelves.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+}
+$('#ruleList').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return; const rules = [...S.rules]; rules.splice(+b.dataset.del, 1); act('rules', { rules }); });
+$('#addRule').onclick = () => {
+  const value = $('#ruleValue').value.trim(); if (!value) return $('#ruleValue').focus();
+  act('rules', { rules: [...(S.rules || []), { kind: $('#ruleKind').value, value, shelf: $('#ruleShelf').value }] }); $('#ruleValue').value = '';
+};
+$('#ruleValue').addEventListener('keydown', e => { if (e.key === 'Enter') $('#addRule').click(); });
+
 // ───────────────────────────────────────────── toast
 let toastTimer = null;
 function toast(message) {
@@ -237,8 +321,11 @@ function toast(message) {
 }
 
 // ───────────────────────────────────────────── capture, paste, undo / redo
-$('#captureBtn').onclick = async () => {
-  const shot = await act('capture');
+$('#captureBtn').addEventListener('contextmenu', e => { e.preventDefault(); window.shelf.send('ctx:capture'); });
+$('#captureBtn').onclick = async e => {
+  if (e.altKey || e.shiftKey) return window.shelf.send('ctx:capture');
+  const shot = await act('capture', { mode: 'area' });
+  if (shot && shot.pending) return;
   if (shot && shot.error) toast(shot.error); else if (shot) toast(Locale.t('captured', { size: `${Locale.number(shot.width)}×${Locale.number(shot.height)}` }));
 };
 $('#undoBtn').onclick = () => act('undo');
@@ -249,6 +336,7 @@ document.addEventListener('keydown', e => {
   if (e.isComposing || !(e.ctrlKey || e.metaKey)) return;
   const key = e.key.toLowerCase(), typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
   if (panel === 'text' && document.activeElement === $('#textBody') && (key === 'z' || key === 'y')) { e.preventDefault(); (key === 'y' || e.shiftKey ? textRedo : textUndo)(); return; }
+  if (key === 'k') { e.preventDefault(); return panel === 'commands' ? openPanel(null) : openCommands(); }
   if (typing) return;
   if (key === 'z') { e.preventDefault(); act(e.shiftKey ? 'redo' : 'undo'); }
   else if (key === 'y') { e.preventDefault(); act('redo'); }
@@ -259,6 +347,8 @@ document.addEventListener('keydown', e => {
 function openPanel(name) {
   panel = name;
   $('#history').hidden = name !== 'history'; $('#textTools').hidden = name !== 'text';
+  $('#rules').hidden = name !== 'rules'; $('#commands').hidden = name !== 'commands';
+  if (name === 'rules') renderRules();
   window.shelf.send('focusable', !!name);    // inputs need keyboard focus; the shelf is normally not focusable
   render();
 }
@@ -271,7 +361,7 @@ let historyItems = [];
 async function loadHistory() { historyItems = await window.shelf.invoke('history:get'); renderHistory(); }
 function renderHistory() {
   const q = $('#historySearch').value.trim().toLowerCase();
-  const items = historyItems.filter(h => !q || (h.name + ' ' + h.preview).toLowerCase().includes(q));
+  const items = historyItems.filter(h => !q || [h.name, h.preview, h.ocr].join(' ').toLowerCase().includes(q));
   const list = $('#historyList'); list.innerHTML = '';
   let pinnedHeader = false, recentHeader = false;
   for (const h of items) {

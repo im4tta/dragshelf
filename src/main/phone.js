@@ -12,7 +12,7 @@ const I18N = require('../shared/i18n');
 
 const MAX_BYTES = 400 * 1024 * 1024;
 
-function phonePage(language, base) {
+function phonePage(language, base, files = []) {
 const t = key => I18N.t(language, key);
 return `<!doctype html><html lang="${language}"><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Drag Shelf</title>
 <style>
@@ -27,7 +27,7 @@ label{display:block;margin:0 auto;padding:18px;border-radius:16px;background:#f5
 select{font:inherit;background:#33342f;color:#f4f5ee;border:1px solid #62645a;border-radius:8px;padding:4px 10px;margin-bottom:16px}
 </style></head><body>
 <select aria-label="Language / ភាសា" onchange="location.search='?lang='+this.value"><option value=en ${language === 'en' ? 'selected' : ''}>English</option><option value=km ${language === 'km' ? 'selected' : ''}>ភាសាខ្មែរ</option></select>
-<h1>${t('phoneSend')}</h1><p>${t('phoneIntro')}</p>
+<h1>${t('phoneSend')}</h1>${files.length ? `<details open style="max-width:340px;margin:0 auto 22px;text-align:left"><summary style="cursor:pointer;color:#f5c63a">${t('phoneShelfFiles')} (${files.length})</summary><ul style="padding-left:18px;line-height:2">${files.map((f, i) => `<li><a style="color:#f4f5ee" download href="${base}/f/${i}">${f.name.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])}</a></li>`).join('')}</ul></details>` : ''}<p>${t('phoneIntro')}</p>
 <label>${t('phoneChoose')}<input id=f type=file accept="image/*,video/*" multiple hidden></label><div id=log aria-live=polite></div>
 <script>
 var f=document.getElementById('f'),log=document.getElementById('log');
@@ -57,7 +57,8 @@ function lanIp() {
 }
 
 class PhoneServer extends EventEmitter {
-  constructor(stashDir, language = () => 'en') { super(); this.language = language; this.dir = path.join(stashDir, 'Phone'); this.server = null; this.count = 0; this.url = ''; }
+  // files(): the active shelf's files, offered for download on the phone page (same secret URL, LAN only).
+  constructor(stashDir, language = () => 'en', files = () => []) { super(); this.language = language; this.files = files; this.dir = path.join(stashDir, 'Phone'); this.server = null; this.count = 0; this.url = ''; }
   get running() { return !!this.server; }
   async start() {
     if (this.server) return this.info();
@@ -83,13 +84,20 @@ class PhoneServer extends EventEmitter {
     if (server.closeAllConnections) server.closeAllConnections();
   }
 
+  sharedFiles() { return (this.files() || []).filter(p => { try { return fs.statSync(p).isFile(); } catch (_) { return false; } }).map(p => ({ path: p, name: path.basename(p) })); }
   _handle(req, res, token) {
     const reply = (code, body, type = 'text/plain') => { res.writeHead(code, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'close' }); res.end(body); };
     if (!isPrivate(req.socket.remoteAddress)) return req.socket.destroy();
     const u = new URL(req.url, 'http://x'); const base = '/' + token;
     const language = I18N.resolveLanguage(u.searchParams.get('lang') || this.language());
     const t = key => I18N.t(language, key);
-    if (req.method === 'GET' && (u.pathname === base || u.pathname === base + '/')) return reply(200, phonePage(language, base), 'text/html');
+    if (req.method === 'GET' && (u.pathname === base || u.pathname === base + '/')) return reply(200, phonePage(language, base, this.sharedFiles()), 'text/html');
+    const fileMatch = req.method === 'GET' && u.pathname.match(new RegExp('^' + base + '/f/(\\d+)$'));
+    if (fileMatch) {
+      const f = this.sharedFiles()[+fileMatch[1]]; if (!f) return reply(404, t('notFound'));
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': fs.statSync(f.path).size, 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(f.name)}`, 'Cache-Control': 'no-store', Connection: 'close' });
+      return fs.createReadStream(f.path).pipe(res);
+    }
     if (req.method === 'GET' && u.pathname === base + '/font.ttf') {
       const font = path.join(__dirname, '../renderer/fonts/NotoSansKhmer.ttf');
       if (!fs.existsSync(font)) return reply(404, t('notFound'));

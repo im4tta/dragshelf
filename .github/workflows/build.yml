@@ -34,6 +34,15 @@ jobs:
         run: xvfb-run -a npm run test:drop
       - name: Clipboard, capture, history and text tool checks
         run: xvfb-run -a npm run test:tools
+      - name: Cache OCR models
+        uses: actions/cache@v4
+        with:
+          path: .ocr-models
+          key: ocr-models-${{ hashFiles('src/main/ocr-models.js') }}
+      - name: OCR, capture/markup, quick paste, command bar, smart shelves, sharing and backup checks
+        run: |
+          node -e "require('./src/main/ocr-models').download('.ocr-models', fetch)"
+          DRAGSHELF_OCR_MODELS="$PWD/.ocr-models" xvfb-run -a npm run test:features
 
   mac:
     needs: test

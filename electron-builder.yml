@@ -13,6 +13,10 @@ files:
   - "!**/node_modules/uiohook-napi/prebuilds/linux*/**"
   - "!**/node_modules/uiohook-napi/{libuiohook,src}/**"
   - "!**/node_modules/**/{test,tests,docs,*.md,*.map}"
+  # OCR runtime: only the Node build and its WebAssembly (the models download on first use)
+  - "!**/node_modules/onnxruntime-web/dist/!(ort.node.min.js|ort-wasm-simd-threaded.wasm|ort-wasm-simd-threaded.mjs)"
+  - "!**/node_modules/onnxruntime-web/lib/**"
+  - "!**/node_modules/onnxruntime-web/types/**"
 npmRebuild: false      # uiohook-napi ships N-API prebuilds for darwin-x64 and darwin-arm64
 asarUnpack:
   - "**/*.node"
