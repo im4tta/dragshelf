@@ -6,14 +6,15 @@ const {
 } = require('electron');
 
 const { Store } = require('./store');
-const { describe } = require('./meta');
+const { describe, EXT_TO_KIND } = require('./meta');
 const { Stash } = require('./stash');
 const { PhoneServer } = require('./phone');
 const { DragWatch, systemSnapshot } = require('./dragwatch');
 const I18N = require('../shared/i18n');
 const { Delivery } = require('./delivery');
-const { ClipWatcher } = require('./tuk');
-let tukWin = null, clipWatch = null, quitting = false;
+const { ClipWatcher } = require('./clipwatch');
+const TextOps = require('../shared/textops');
+let clipWatch = null;
 let updates;
 function language() { return I18N.resolveLanguage(store && store.settings.language, app.getLocale()); }
 function tr(key, values) { return I18N.t(language(), key, values); }
@@ -89,13 +90,14 @@ async function buildState() {
   const shelves = await Promise.all(store.shelves.map(async s => ({
     id: s.id,
     name: s.name,
-    items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added })))
+    items: await Promise.all(s.items.map(async it => ({ ...localizedMeta(await describe(it.p)), done: it.done, added: it.added, editable: isTextFile(it.p) })))
   })));
   const st = store.settings;
   return {
     viewport: { maxCardHeight: workAreaAt(shelfWin ? { x: shelfWin.getBounds().x + PAD, y: shelfWin.getBounds().y + PAD } : undefined).height - 2 * PAD - 12 },
     shelves, active: store.active, platform: process.platform, language: language(),
-    settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut },
+    settings: { theme: st.theme, accent: st.accent, hotkey: st.hotkey, hotkeyLabel: accelLabel(st.hotkey), strict: st.strict, moveOnDragOut: st.moveOnDragOut, autoPaste: !!st.autoPaste, captureScale: st.captureScale },
+    canUndo: store.canUndo, canRedo: store.canRedo,
     phone: !!(phone && phone.running), hooks: hooksOn
   };
 }
@@ -124,77 +126,94 @@ function openDelivery() {
   deliveryWin.on('closed', () => { deliveryWin = null; if (deliveryJobs) deliveryJobs.cancel(); });
 }
 
-// ───────────────────────────────────────────────────────── Tuk: clipboard history + screenshots
-function openTuk(show = true) {
-  if (tukWin && !tukWin.isDestroyed()) { if (show) { tukWin.show(); tukWin.focus(); } return tukWin; }
-  const wa = workAreaAt(), width = Math.min(1100, wa.width - 24), height = Math.min(760, wa.height - 36);
-  tukWin = new BrowserWindow({ width, height, minWidth: Math.min(420, width), minHeight: Math.min(380, height),
-    x: Math.round(wa.x + (wa.width - width) / 2), y: Math.round(wa.y + (wa.height - height) / 2),
-    show: false, icon: B('icon.png'), title: tr('tukMenu'), backgroundColor: '#161714', autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, '..', 'preload', 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
-  tukWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  tukWin.webContents.on('will-navigate', event => event.preventDefault());
-  tukWin.loadFile(R('tuk/index.html'), { query: { ...windowQuery(), desktop: '1' } });
-  if (show) tukWin.once('ready-to-show', () => { tukWin.show(); tukWin.focus(); });
-  // Closing only hides the window so clipboard collection keeps running in the background.
-  tukWin.on('close', event => { if (!quitting) { event.preventDefault(); tukWin.hide(); } });
-  tukWin.on('closed', () => { tukWin = null; });
-  return tukWin;
+// ───────────────────────────────────────────────────────── clipboard, capture, history, text tools
+const TEXT_EXT = new Set(['txt', 'md', 'csv', 'tsv', 'log', 'json', 'yml', 'yaml', 'xml', 'html', 'css', 'js', 'ts', 'sql', 'ini']);
+const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+function isTextFile(p) {
+  if (!TEXT_EXT.has(path.extname(p).slice(1).toLowerCase())) return false;
+  try { const st = fs.statSync(p); return st.isFile() && st.size <= MAX_TEXT_BYTES; } catch (_) { return false; }
 }
-function sendTukItems(items) {
-  const win = openTuk(false);
-  const deliver = () => win.webContents.send('tuk:clip', items);
-  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', deliver); else deliver();
+// Puts whatever was copied onto the active shelf: files by reference, images and text saved to the stash.
+function addClipboard(snap) {
+  if (!snap || !snap.kind) return 0;
+  let paths = [];
+  if (snap.kind === 'files') paths = snap.paths.filter(p => fs.existsSync(p));
+  else if (snap.kind === 'image') paths = [stash.saveBlob(`Image ${require('./stash').timestamp()}.${(snap.mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '')}`, snap.data)];
+  else if (/^https?:\/\/\S+$/i.test(snap.text.trim())) paths = [stash.saveUrl(snap.text.trim())];
+  else if (snap.text.trim()) paths = [stash.saveText(snap.text)];
+  if (!paths.length) return 0;
+  store.checkpoint(); const n = store.addPaths(store.active, paths); store.settle(); pushState();
+  return n;
 }
-function setTukAuto(on) {
-  store.setSetting('tukAuto', !!on);
-  if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onItems: sendTukItems });
-  if (on) clipWatch.start(); else clipWatch.stop();
-  if (tukWin && !tukWin.isDestroyed()) tukWin.webContents.send('tuk:auto', !!on);
+function ensureClipWatch() { if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onCopy: addClipboard }); return clipWatch; }
+function setAutoPaste(on) {
+  store.setSetting('autoPaste', !!on);
+  if (on) ensureClipWatch().start(); else if (clipWatch) clipWatch.stop();
+  pushState();
 }
-async function captureScreen(scale) {
-  scale = Math.min(4, Math.max(1, Number(scale) || 1));
+async function pasteNow() { return addClipboard(await ensureClipWatch().safeRead()); }
+// Writes to the clipboard without auto-paste picking it straight back up.
+async function copyOut(write) { await write(); if (clipWatch) await clipWatch.resync(); }
+async function copyItem(p) {
+  const { ClipboardItem } = require('electron');
+  const kind = EXT_TO_KIND[path.extname(p).slice(1).toLowerCase()];
+  if (isTextFile(p)) return copyOut(() => clipboard.writeText(fs.readFileSync(p, 'utf8')));
+  if (kind === 'image' && fs.existsSync(p)) {
+    const png = nativeImage.createFromPath(p).toPNG();
+    if (png.length) return copyOut(() => clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]));
+  }
+  return copyOut(() => clipboard.writeText(p));
+}
+
+// Screenshot of the display under the cursor at 1–4× its logical size, added to the active shelf.
+async function captureScreen() {
+  const scale = Math.min(4, Math.max(1, Number(store.settings.captureScale) || 2));
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const hidden = [tukWin, shelfWin].filter(w => w && !w.isDestroyed() && w.isVisible());
-  hidden.forEach(w => w.hide());
-  await new Promise(r => setTimeout(r, 250)); // let the windows disappear before grabbing the screen
+  const wasVisible = shelfWin && shelfWin.isVisible();
+  if (wasVisible) shelfWin.hide();
+  await new Promise(r => setTimeout(r, 250)); // let the shelf disappear before grabbing the screen
   try {
-    // Native pixels are size × scaleFactor; larger multiples are rendered up to scale × the logical size.
     const factor = Math.max(display.scaleFactor, scale);
     const thumbnailSize = { width: Math.round(display.size.width * factor), height: Math.round(display.size.height * factor) };
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize });
     const source = sources.find(s => String(s.display_id) === String(display.id)) || sources[0];
-    if (!source || source.thumbnail.isEmpty()) throw new Error(IS_MAC ? 'Screen Recording permission is needed (System Settings → Privacy & Security)' : 'No screen available');
+    if (!source || source.thumbnail.isEmpty()) throw new Error(tr(IS_MAC ? 'captureDeniedMac' : 'captureFailed'));
     let image = source.thumbnail;
     const target = { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) };
     if (image.getSize().width < target.width) image = image.resize({ ...target, quality: 'best' });
-    const size = image.getSize();
-    return { data: image.toPNG(), width: size.width, height: size.height };
-  } finally { hidden.forEach(w => w === shelfWin ? w.showInactive() : w.show()); }
+    const file = stash.saveBlob(`Screenshot ${require('./stash').timestamp()}@${scale}x.png`, image.toPNG());
+    store.checkpoint(); store.addPaths(store.active, [file]); pushState();
+    return { path: file, ...image.getSize() };
+  } finally { if (wasVisible) shelfWin.showInactive(); }
 }
-function wireTukIpc() {
-  ipcMain.handle('tuk:info', () => ({ auto: !!store.settings.tukAuto, platform: process.platform }));
-  ipcMain.handle('tuk:auto', (e, on) => { setTukAuto(on); return !!on; });
-  ipcMain.handle('tuk:read', () => (clipWatch || new ClipWatcher({ clipboard, onItems() {} })).readNow());
-  ipcMain.handle('tuk:capture', (e, scale) => captureScreen(scale));
-  ipcMain.handle('tuk:copy', async (e, payload = {}) => {
-    const { ClipboardItem } = require('electron');
-    if (payload.png) await clipboard.write([new ClipboardItem({ 'image/png': new Blob([Buffer.from(payload.png)], { type: 'image/png' }) })]);
-    else if (payload.html) await clipboard.write([new ClipboardItem({ 'text/html': String(payload.html), 'text/plain': String(payload.text || '') })]);
-    else await clipboard.writeText(String(payload.path || payload.text || ''));
-    if (clipWatch) await clipWatch.resync();
-    return true;
+
+function historyEntries() {
+  return store.historyView().map(h => {
+    const ext = path.extname(h.p).slice(1).toLowerCase(), exists = fs.existsSync(h.p);
+    let preview = '';
+    if (exists && isTextFile(h.p)) { try { const fd = fs.openSync(h.p, 'r'), buf = Buffer.alloc(240); const n = fs.readSync(fd, buf, 0, 240, 0); fs.closeSync(fd); preview = buf.subarray(0, n).toString('utf8').replace(/�$/, '').replace(/\s+/g, ' ').trim(); } catch (_) { /* unreadable */ } }
+    return { path: h.p, name: path.basename(h.p), kind: exists ? EXT_TO_KIND[ext] || (fs.statSync(h.p).isDirectory() ? 'folder' : 'file') : 'missing', exists, added: h.added, pinned: h.pinned, preview, onShelf: store.cur.items.some(i => i.p === h.p) };
   });
-  ipcMain.handle('tuk:to-shelf', (e, payload = {}) => {
-    let p;
-    if (payload.path && fs.existsSync(payload.path)) p = payload.path;
-    else if (payload.data) p = stash.saveBlob(String(payload.name || 'tuk-item'), Buffer.from(payload.data));
-    else if (/^https?:\/\/\S+$/i.test(String(payload.text || '').trim())) p = stash.saveUrl(payload.text.trim());
-    else p = stash.saveText(String(payload.text || ''));
-    store.addPaths(store.active, [p]); pushState();
-    return store.cur.name;
-  });
-  ipcMain.handle('tuk:reveal', (e, p) => { if (typeof p === 'string' && fs.existsSync(p)) shell.showItemInFolder(p); });
+}
+
+// Split one text item into several, or merge every text item on the shelf into one.
+function splitTextItem(index, separator, opts) {
+  const it = store.cur.items[index]; if (!it || !isTextFile(it.p)) return 0;
+  const parts = TextOps.splitParts(fs.readFileSync(it.p, 'utf8'), separator, opts);
+  if (parts.length < 2) return parts.length;
+  store.checkpoint(); store.replaceItem(store.active, index, parts.map(part => stash.saveText(part))); pushState();
+  return parts.length;
+}
+function mergeTextItems(separator, opts) {
+  const items = store.cur.items.filter(i => isTextFile(i.p));
+  if (items.length < 2) return 0;
+  const merged = stash.saveText(TextOps.mergeParts(items.map(i => fs.readFileSync(i.p, 'utf8')), separator, opts));
+  const first = store.cur.items.indexOf(items[0]);
+  store.checkpoint();
+  store.removePaths(store.active, items.slice(1).map(i => i.p));
+  store.replaceItem(store.active, store.cur.items.indexOf(items[0]) === -1 ? first : store.cur.items.indexOf(items[0]), [merged]);
+  pushState();
+  return items.length;
 }
 
 // ───────────────────────────────────────────────────────── shelf window
@@ -257,7 +276,7 @@ function startWatching() {
       const b = shelfWin.getBounds();
       const inside = shelfWin.isVisible() && x >= b.x + PAD && x <= b.x + b.width - PAD && y >= b.y + PAD && y <= b.y + b.height - PAD;
       shelfWin.webContents.send('drag:ended', { inside });
-      if (!inside && !d.cancelled && store.settings.moveOnDragOut && !altKey) { store.removePaths(d.shelf, d.paths); pushState(); }
+      if (!inside && !d.cancelled && store.settings.moveOnDragOut && !altKey) { store.checkpoint(); store.removePaths(d.shelf, d.paths); pushState(); }
     }
     setTimeout(autoHideIfEmpty, 350);
   });
@@ -352,15 +371,21 @@ function buildTrayMenu() {
     { label: tr(shelfWin && shelfWin.isVisible() ? 'hideShelf' : 'showShelf'), accelerator: undefined, sublabel: accelLabel(st.hotkey), click: () => toggleShelf(true) },
     { label: tr('phoneMenu'), type: 'checkbox', checked: !!(phoneWin && !phoneWin.isDestroyed()), click: openPhone },
     { label: tr('prepareDelivery'), click: openDelivery },
-    { label: tr('tukMenu'), click: () => openTuk(true) },
-    { label: tr('tukAuto'), type: 'checkbox', checked: !!st.tukAuto, click: () => setTukAuto(!st.tukAuto) },
+    { type: 'separator' },
+    { label: tr('autoPaste'), type: 'checkbox', checked: !!st.autoPaste, click: () => setAutoPaste(!st.autoPaste) },
+    { label: tr('pasteNow'), click: () => pasteNow() },
+    { label: tr('captureScreen'), click: () => captureScreen().catch(err => dialog.showErrorBox(tr('captureScreen'), err.message)) },
+    { label: tr('captureScale'), submenu: [1, 2, 3, 4].map(n => ({ label: `${n}×`, type: 'radio', checked: Number(st.captureScale) === n, click: set('captureScale', n) })) },
+    { label: tr('undo'), enabled: store.canUndo, click: () => { store.undo(); pushState(); } },
+    { label: tr('redo'), enabled: store.canRedo, click: () => { store.redo(); pushState(); } },
+    { type: 'separator' },
     { type: 'separator' },
     { label: tr('theme'), submenu: [['auto', IS_MAC ? 'macTheme' : 'systemTheme'], ['light', 'light'], ['dark', 'dark']].map(([v, key]) => ({ label: tr(key), type: 'radio', checked: st.theme === v, click: set('theme', v) })) },
     { label: tr('accent'), submenu: accentNames().map(([v, l]) => ({ label: l, type: 'radio', checked: st.accent === v, click: set('accent', v) })) },
     { label: tr('language'), submenu: [['auto', tr('systemLanguage')], ['en', 'English'], ['km', 'ភាសាខ្មែរ']].map(([value, label]) => ({ label, type: 'radio', checked: st.language === value, click: () => { store.setSetting('language', value); updateLanguage(); } })) },
     { label: tr('shortcutMenu'), click: openShortcutWindow },
     { type: 'separator' },
-    { label: tr('clearShelves'), click: () => { store.clearAll(); pushState(); if (!pinned) hideShelf(); } },
+    { label: tr('clearShelves'), click: () => { store.checkpoint(); store.clearAll(); pushState(); if (!pinned) hideShelf(); } },
     { label: tr('removeAfter'), type: 'checkbox', checked: st.moveOnDragOut, click: set('moveOnDragOut', !st.moveOnDragOut) },
     { label: tr('strictDrag'), type: 'checkbox', checked: st.strict, click: set('strict', !st.strict) },
     { label: tr(IS_WIN ? 'startWindows' : 'startLogin'), type: 'checkbox', checked: app.getLoginItemSettings(loginOptions()).openAtLogin, click: m => app.setLoginItemSettings({ ...loginOptions(), openAtLogin: m.checked }) },
@@ -392,18 +417,20 @@ function openItemMenu(index) {
   Menu.buildFromTemplate([
     { label: tr('open'), click: () => shell.openPath(it.p) },
     { label: tr(IS_MAC ? 'revealMac' : 'reveal'), click: () => shell.showItemInFolder(it.p) },
-    { label: tr('copyPath'), click: () => clipboard.writeText(it.p) },
+    { label: tr('copyPath'), click: () => copyOut(() => clipboard.writeText(it.p)) },
+    { label: tr('copyItem'), click: () => copyItem(it.p) },
+    ...(isTextFile(it.p) ? [{ label: tr('splitMerge'), click: () => shelfWin.webContents.send('text:open', index) }] : []),
     { type: 'separator' },
     { label: tr(it.done ? 'markNotDone' : 'markDone'), click: () => { store.toggleDone(store.active, index); pushState(); } },
-    { label: tr('remove'), click: () => { store.removePaths(store.active, [it.p]); pushState(); setTimeout(autoHideIfEmpty, 50); } }
+    { label: tr('remove'), click: () => { store.checkpoint(); store.removePaths(store.active, [it.p]); pushState(); setTimeout(autoHideIfEmpty, 50); } }
   ]).popup({ window: shelfWin });
 }
 function openTabMenu(index) {
   store.setActive(index); pushState();
   Menu.buildFromTemplate([
     { label: tr('rename'), click: () => shelfWin.webContents.send('rename', index) },
-    { label: tr('clearShelf'), click: () => { store.clearShelf(index); pushState(); } },
-    { label: tr('deleteShelf'), enabled: store.shelves.length > 1, click: () => { store.deleteShelf(index); pushState(); } }
+    { label: tr('clearShelf'), click: () => { store.checkpoint(); store.clearShelf(index); pushState(); } },
+    { label: tr('deleteShelf'), enabled: store.shelves.length > 1, click: () => { store.checkpoint(); store.deleteShelf(index); pushState(); } }
   ]).popup({ window: shelfWin });
 }
 
@@ -413,8 +440,24 @@ function wireIpc() {
     return require('./drop-files').resolveDrop(payload);
   });
   ipcMain.handle('state:get', () => buildState());
-  ipcMain.handle('act', (e, type, p = {}) => {
+  ipcMain.handle('act', async (e, type, p = {}) => {
+    const undoable = ['add', 'toggleDone', 'remove', 'clearShelf', 'clearDone', 'clearAll', 'rename', 'move', 'addFromHistory'].includes(type);
+    if (undoable) store.checkpoint();
     switch (type) {
+      case 'undo': store.undo(); break;
+      case 'redo': store.redo(); break;
+      case 'paste': { const n = await pasteNow(); pushState(); return n; }
+      case 'capture': try { return await captureScreen(); } catch (err) { return { error: err.message }; }
+      case 'autoPaste': setAutoPaste(p.value); return !!p.value;
+      case 'addFromHistory': if (fs.existsSync(p.path)) store.addPaths(store.active, [p.path]); break;
+      case 'pinHistory': { const on = store.togglePin(p.path); pushState(); return on; }
+      case 'forget': store.forget([p.path]); return true;
+      case 'clearHistory': store.clearHistory(); return true;
+      case 'copy': await copyItem(p.path); return true;
+      case 'readText': { const it = store.cur.items[p.index]; return it && isTextFile(it.p) ? { path: it.p, text: fs.readFileSync(it.p, 'utf8') } : null; }
+      case 'saveText': { const it = store.cur.items[p.index]; if (!it || !isTextFile(it.p)) return false; fs.writeFileSync(it.p, String(p.text), 'utf8'); pushState(); return true; }
+      case 'split': return splitTextItem(p.index, p.separator, p.opts || {});
+      case 'merge': return mergeTextItems(p.separator, p.opts || {});
       case 'add': store.addPaths(p.shelf ?? store.active, p.paths || []); break;
       case 'toggleDone': store.toggleDone(p.shelf ?? store.active, p.index); break;
       case 'remove': store.removePaths(p.shelf ?? store.active, p.paths || []); break;
@@ -431,12 +474,14 @@ function wireIpc() {
       case 'setting': store.setSetting(p.key, p.value); if (p.key === 'theme') applyTheme(); if (p.key === 'language') updateLanguage(); break;
       default: break;
     }
+    if (undoable) store.settle();
     pushState(); setTimeout(autoHideIfEmpty, 400);
     return null;
   });
-  ipcMain.handle('drop:blob', (e, shelf, name, buf) => { const p = stash.saveBlob(name, buf); store.addPaths(shelf, [p]); pushState(); return p; });
-  ipcMain.handle('drop:text', (e, shelf, text) => { const p = stash.saveText(text); store.addPaths(shelf, [p]); pushState(); return p; });
-  ipcMain.handle('drop:url', (e, shelf, url) => { const p = stash.saveUrl(url); store.addPaths(shelf, [p]); pushState(); return p; });
+  ipcMain.handle('history:get', () => historyEntries());
+  ipcMain.handle('drop:blob', (e, shelf, name, buf) => { store.checkpoint(); const p = stash.saveBlob(name, buf); store.addPaths(shelf, [p]); pushState(); return p; });
+  ipcMain.handle('drop:text', (e, shelf, text) => { store.checkpoint(); const p = stash.saveText(text); store.addPaths(shelf, [p]); pushState(); return p; });
+  ipcMain.handle('drop:url', (e, shelf, url) => { store.checkpoint(); const p = stash.saveUrl(url); store.addPaths(shelf, [p]); pushState(); return p; });
 
   // Native drag-out. Must be synchronous inside the renderer's dragstart handler.
   ipcMain.on('drag:start', (e, paths) => {
@@ -475,7 +520,7 @@ function wireIpc() {
 app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScreenPoint(), true); });
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
-  quitting = true; if (clipWatch) clipWatch.stop();
+  if (clipWatch) clipWatch.stop();
   if (updates) updates.stop();
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
@@ -497,10 +542,10 @@ app.whenReady().then(() => {
   updateLanguage();
 
   phone.on('file', p => { store.addPaths(store.active, [p]); pushState(); if (phoneWin && !phoneWin.isDestroyed()) phoneWin.webContents.send('phone:count', phone.count); });
-  wireIpc(); wireTukIpc();
+  wireIpc();
   deliveryJobs = require('./delivery-ipc')({ window: () => deliveryWin, shelfId: () => deliveryShelfId, setShelfId: value => { deliveryShelfId = value; }, store: () => store, service: () => delivery, state: buildState, language, t: tr, push: pushState, test: () => TEST });
   createShelfWindow();
-  if (store.settings.tukAuto) setTukAuto(true); // keeps collecting in the background; the Tuk window opens on demand
+  if (store.settings.autoPaste) ensureClipWatch().start(); // keeps pasting copies onto the shelf in the background
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) {
     updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
@@ -521,7 +566,7 @@ app.whenReady().then(() => {
       shelfWin: () => shelfWin, phoneWin: () => phoneWin, guideWin: () => guideWin, keyWin: () => keyWin,
       showShelf: () => { placeCard(80, 60); shelfWin.showInactive(); pushState(); },
       openPhone, openGuide, openShortcutWindow, pushState, store: () => store,
-      openDelivery, deliveryWin: () => deliveryWin, openTuk, tukWin: () => tukWin, setTukAuto, clipWatch: () => clipWatch,  delivery: () => delivery,
+      openDelivery, deliveryWin: () => deliveryWin, clipWatch: () => clipWatch, captureScreen,   delivery: () => delivery,
       imageSize: file => nativeImage.createFromPath(file).getSize(),
       writeTestImage: (source, destination, width, height) => fs.writeFileSync(destination, nativeImage.createFromPath(source).resize({ width, height }).toPNG())
     };

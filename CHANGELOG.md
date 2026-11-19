@@ -1,12 +1,12 @@
 # Changelog
 
 ## Unreleased
-- Added **Tuk (ទុក)** to Drag Shelf: a clipboard history and screenshot window opened from the tray/menu-bar menu.
-  - Optional automatic collection of everything copied (text, links, HTML, images and files of any type), running in the background even while Tuk is closed. Off by default.
-  - Native screen capture at 1×–4×; captions, search, type filter, pinning, copy back without re-collecting, and **⇪ Shelf** to add any item to the current shelf.
-  - Split / Merge text with custom separators (`\n`, `\t`, regex), trim/unique/wrap, sort/reverse and undo/redo.
-  - ZIP export with a captions index; dark theme by default; English and Khmer labels.
-  - The same page is published on the website as a browser-only version (`/tuk/`).
+- **Auto-paste:** turn on *Auto-paste copied items* (tray/menu-bar menu or the History panel) and whatever you copy lands on the active shelf, even while the shelf is hidden: files of any type copied in Finder/Explorer (by reference), images, links and text. *Paste clipboard to shelf* and ⌘/Ctrl+V do it once.
+- **Screen capture:** the camera button in the shelf header (or the menu) adds a screenshot of the current display at 1×–4× resolution (*Screenshot resolution*).
+- **History:** the clock button opens everything that ever landed on a shelf, with search, copy back to the clipboard and add to the shelf again. Right-click removes an entry.
+- **Pinned items:** pin history entries to keep them on top; pins are never pruned or cleared.
+- **Split / merge text:** right-click a text item → *Split / merge text…* to split or merge lines with any separator (`\n`, `\t`, `,` …), split one item into several shelf items, or merge all text items on a shelf into one.
+- **Undo / redo:** undo and redo shelf changes (adding, removing, clearing, reordering, splitting, merging, drag-out removal) with the footer buttons, ⌘/Ctrl+Z / ⇧⌘Z or the menu; the text editor has its own undo / redo.
 
 ## 1.4.0
 - Added automatic stable-release checks after startup and daily, plus a manual Check for updates menu action.

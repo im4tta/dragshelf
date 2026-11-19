@@ -24,6 +24,14 @@ window.GLYPH = {
   history: '<path d="M4 7v5h5M4 12a8 8 0 108-8 8 8 0 00-6 2.5M12 8v5l3 2"/>',
   chevron: '<path d="M8 5l7 7-7 7"/>',
   arrow: '<path d="M4 12h16M14 6l6 6-6 6"/>',
+  camera: '<path d="M4 8.5a2 2 0 012-2h2l1.5-2h5l1.5 2h2a2 2 0 012 2V17a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><circle cx="12" cy="12.5" r="3.5"/>',
+  pin: '<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V5.5A1.5 1.5 0 0014.5 4h-9A1.5 1.5 0 004 5.5v9A1.5 1.5 0 005.5 16H8"/>',
+  undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12"/>',
+  redo: '<path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 000 12"/>',
+  paste: '<rect x="5" y="5" width="14" height="16" rx="2.5"/><path d="M9 5V3.5h6V5M9 11h6M9 15h4"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
   minimize: '<path d="M5 12h14"/>',
   maximize: '<rect x="5" y="5" width="14" height="14" rx="1"/>'
 };

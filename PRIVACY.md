@@ -14,9 +14,9 @@ The Windows app stores its data under your Windows user profile. The packaged Mi
 
 The Windows app observes mouse movement and button state to detect a drag-and-shake gesture. It registers a global shortcut and reads shortcut keys while you configure that shortcut. It uses the active app's executable name for app exclusions. It does not record your typing history or send these interactions to the developer.
 
-## Tuk clipboard history and screenshots
+## Clipboard, screenshots and history
 
-Tuk keeps clipboard items, screenshots and their captions in local browser storage (IndexedDB) on your computer; nothing is uploaded. When "Collect copied items automatically" is on, Drag Shelf reads the system clipboard about once a second, including while the Tuk window is closed, and saves each new text, link, image or copied file (files up to 50 MB are copied in; larger files and folders are kept as a path). It is off by default; turn it off in the tray/menu-bar menu or in Tuk. Delete items in Tuk to remove them. Screen capture happens only when you press Capture screen; on macOS it needs Screen Recording permission.
+When *Auto-paste copied items* is on (it is off by default), Drag Shelf reads the system clipboard about once a second and adds each new copy to the active shelf: copied files are referenced in place, and images, links and text are saved as local files. *Paste clipboard to shelf* reads the clipboard once. Screen captures happen only when you press the capture button; macOS asks for Screen Recording permission. A history of items added to shelves is stored locally in `history.json`; remove entries or clear it from the History panel. Nothing is uploaded.
 
 ## Optional phone transfers
 

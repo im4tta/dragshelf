@@ -109,3 +109,51 @@ button.link.danger:hover { color: var(--danger); }
 #confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 #confetti i { position: absolute; border-radius: 50%; animation: burst .75s cubic-bezier(.1,.7,.3,1) forwards; }
 @keyframes burst { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; } }
+
+/* ── undo / redo, toast */
+#foot button.icon:disabled { opacity: .35; cursor: default; background: transparent; }
+#toast { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 8px); max-width: calc(100% - 28px); background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 5; text-align: center; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ── panels: history and split / merge replace the list while open */
+#card.panel-open #listWrap, #card.panel-open #empty, #card.panel-open #foot, #card.panel-open .prepare-entry { display: none !important; }
+.panel { padding: 0 12px 12px; }
+.panel[hidden] { display: none; }
+.panel-top { display: flex; align-items: center; gap: 6px; padding: 2px 0 8px; font-size: 14px; }
+.panel-top strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-tools { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: var(--dim); }
+.panel-tools label { display: inline-flex; align-items: center; gap: 4px; }
+.panel .sp { flex: 1; }
+.panel input[type=search], .panel input:not([type]), .panel textarea { font: inherit; color: var(--text); background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; outline: none; -webkit-user-select: text; user-select: text; }
+.panel input:focus, .panel textarea:focus { border-color: var(--accent); }
+#historySearch { flex: 1; min-width: 0; font-size: 13px; }
+#sep { width: 52px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+#textBody { width: 100%; height: 190px; resize: vertical; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.chips { display: inline-flex; gap: 3px; }
+.chips button, .pill { min-width: 24px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--circle); color: var(--text); font-size: 12px; font-weight: 600; }
+.chips button:hover, .pill:hover { background: var(--circle-hover); }
+.pill.accent { background: var(--accent); color: var(--accent-fg); }
+.panel button.icon:disabled { opacity: .35; cursor: default; }
+.panel-foot { display: flex; align-items: center; padding-top: 6px; }
+.panel-empty { color: var(--dim); font-size: 12.5px; text-align: center; padding: 18px 8px; margin: 0; }
+#historyList { list-style: none; margin: 0; padding: 0; max-height: min(420px, max(120px, calc(var(--shelf-max-height, 640px) - 190px))); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--circle) transparent; }
+.h-label { font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); padding: 8px 6px 2px; }
+.h-row { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 6px; border-radius: 14px; }
+.h-row:hover { background: var(--row-hover); }
+.h-row .tile { width: 34px; height: 34px; border-radius: 11px; }
+.h-row .tile svg { width: 18px; height: 18px; }
+.h-row .name { font-size: 13px; }
+.h-row .sub { font-size: 11px; margin-top: 1px; }
+.h-row.missing .tile { background: color-mix(in srgb, var(--danger) 22%, var(--bg)); color: var(--danger); }
+.h-actions { display: flex; gap: 0; opacity: .55; transition: opacity .15s; }
+.h-row:hover .h-actions, .h-row.pinned .h-actions, .h-actions:focus-within { opacity: 1; }
+.h-actions .icon { width: 24px; height: 24px; }
+.h-actions .icon svg { width: 14px; height: 14px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11.5px; color: var(--dim); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch span { width: 30px; height: 18px; border-radius: 9px; background: var(--circle); position: relative; transition: background .2s; flex: none; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--text); transition: transform .2s; }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(12px); background: var(--accent-fg); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch em { font-style: normal; max-width: 92px; line-height: 1.2; }

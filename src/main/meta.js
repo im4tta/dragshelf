@@ -75,4 +75,4 @@ async function describe(p) {
   return meta;
 }
 
-module.exports = { describe };
+module.exports = { describe, EXT_TO_KIND };
