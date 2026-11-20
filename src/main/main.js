@@ -138,13 +138,25 @@ function addClipboard(snap) {
   if (!snap || !snap.kind) return 0;
   let paths = [];
   if (snap.kind === 'files') paths = snap.paths.filter(p => fs.existsSync(p));
-  else if (snap.kind === 'image') paths = [stash.saveBlob(`Image ${require('./stash').timestamp()}.${(snap.mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '')}`, snap.data)];
+  else if (snap.kind === 'image') { const png = clipboardImageToFile(snap); if (png) paths = [stash.saveBlob(`Image ${require('./stash').timestamp()}.${png.ext}`, png.data)]; }
   else if (/^https?:\/\/\S+$/i.test(snap.text.trim())) paths = [stash.saveUrl(snap.text.trim())];
   else if (snap.text.trim()) paths = [stash.saveText(snap.text)];
   if (!paths.length) return 0;
   store.checkpoint(); const n = store.addRouted(paths).added; store.settle(); pushState();
   if (snap.kind === 'image') paths.forEach(autoOcr);
   return n;
+}
+// Copied images arrive as PNG/JPEG, a Windows bitmap (CF_DIB) or a macOS TIFF; the shelf keeps PNG or JPEG.
+function clipboardImageToFile(snap) {
+  if (snap.mime === 'image/png') return { ext: 'png', data: snap.data };
+  if (snap.mime === 'image/jpeg') return { ext: 'jpg', data: snap.data };
+  let image;
+  try {
+  if (snap.mime === 'image/x-dib') { const { width, height, bgra } = require('./clipwatch').dibToBitmap(snap.data); image = nativeImage.createFromBitmap(bgra, { width, height }); }
+  else if (snap.mime === 'image/bmp') { const { width, height, bgra } = require('./clipwatch').dibToBitmap(snap.data.subarray(14)); image = nativeImage.createFromBitmap(bgra, { width, height }); }
+  else image = nativeImage.createFromBuffer(snap.data);
+  } catch (_) { return null; } // not an image we can read
+  return image && !image.isEmpty() ? { ext: 'png', data: image.toPNG() } : null;
 }
 function ensureClipWatch() { if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onCopy: addClipboard, options: () => ({ skipConcealed: store.settings.skipConcealed !== false }) }); return clipWatch; }
 function setAutoPaste(on) {
@@ -675,6 +687,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     ...(IS_MAC ? [{ label: tr(hooksOn ? 'detectionOn' : 'enableDetection'), enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
     { label: tr('showGuide'), click: openGuide },
+    ...(updates && updates.ready ? [{ label: tr('restartToUpdate', { version: updates.ready.version }), click: () => updates.install(true) }] : []),
     { label: tr('checkUpdates'), click: () => updates && updates.check(true) },
     { label: tr('automaticUpdates'), type: 'checkbox', checked: st.updateChecks !== false, click: set('updateChecks', st.updateChecks === false) },
     { label: tr('privacy'), click: () => shell.openExternal(`https://github.com/im4tta/dragshelf/blob/main/PRIVACY${language() === 'km' ? '.km' : ''}.md`) },
@@ -831,7 +844,7 @@ app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScre
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
   if (clipWatch) clipWatch.stop(); stopOcrWorker();
-  if (updates) updates.stop();
+  if (updates) { updates.stop(); updates.installOnQuit(); }
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
 });
@@ -859,7 +872,7 @@ app.whenReady().then(() => {
   if (store.settings.autoPaste) ensureClipWatch().start(); // keeps pasting copies onto the shelf in the background
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) {
-    updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
+    updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr, notify: message => { if (shelfWin && !shelfWin.isDestroyed()) shelfWin.webContents.send('flash', message); } });
     createTray(); registerHotkey(store.settings.hotkey); registerQuickPaste(); startWatching();
     setInterval(() => { store.expireHistory(); }, 36e5);
     if (app.isPackaged) updates.start();

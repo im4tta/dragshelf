@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0
+- **Copied screenshots paste onto the shelf.** Paste and Auto-paste now read images the way Windows screenshot tools put them on the clipboard (Snipping Tool, Print Screen, Snip & Sketch, ShareX: `PNG`, `CF_DIBV5`/`CF_DIB` bitmaps) and macOS TIFF/PNG, and save them as PNG. Previously only text and links were picked up there.
+- **Updates install themselves.** Drag Shelf now downloads new versions in the background, verifies them against GitHub's SHA-256 digests, and installs them with one click (**Restart now**) or automatically when you quit — no browser, no installer windows. Works for the Windows installer and portable builds and for macOS (including the current ad-hoc signed builds). Falls back to the download page only when it cannot update in place (for example when run from the DMG).
+
 ## 1.6.0
 - **Khmer + English text recognition (OCR):** copy the text out of any image (right-click → *Copy text from image*), and new screenshots are read automatically so History and Quick paste can find them by their words. Uses Chakkhu ចក្ខុ by Ing Muyleang with the KhmerOCR detector, entirely on your computer. The models (≈50 MB) download once on first use and are checksum-verified, so the installers stay small (+≈3 MB for the runtime).
 - **Quick paste** (⌥⇧V / Ctrl+Shift+V): a searchable palette of history and pins at the cursor; Enter pastes into the app in front, ⇧Enter only copies.

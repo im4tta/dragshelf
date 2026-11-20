@@ -6,7 +6,13 @@
   'use strict';
   const rows = [
     ['checkUpdates', 'Check for updates…', 'ពិនិត្យរកកំណែថ្មី…'],
-    ['automaticUpdates', 'Automatically check for updates', 'ពិនិត្យរកកំណែថ្មីដោយស្វ័យប្រវត្តិ'],
+    ['automaticUpdates', 'Automatically download and install updates', 'ទាញយក និងដំឡើងកំណែថ្មីដោយស្វ័យប្រវត្តិ'],
+    ['updateDownloading', 'Downloading Drag Shelf {version}…', 'កំពុងទាញយក Drag Shelf {version}…'],
+    ['updateReady', 'An update is ready to install', 'កំណែថ្មីរួចរាល់សម្រាប់ដំឡើង'],
+    ['updateReadyDetail', 'Drag Shelf {version} has been downloaded and verified. Restart now to finish, or it will be installed the next time you quit. Your shelves are kept.', 'Drag Shelf {version} ត្រូវបានទាញយក និងផ្ទៀងផ្ទាត់ហើយ។ ចាប់ផ្ដើមឡើងវិញឥឡូវនេះដើម្បីបញ្ចប់ ឬវានឹងត្រូវបានដំឡើងនៅពេលអ្នកបិទកម្មវិធីលើកក្រោយ។ ធ្នើរបស់អ្នកត្រូវបានរក្សាទុក។'],
+    ['restartNow', 'Restart now', 'ចាប់ផ្ដើមឡើងវិញឥឡូវនេះ'],
+    ['installLater', 'Install when I quit', 'ដំឡើងនៅពេលខ្ញុំបិទ'],
+    ['restartToUpdate', 'Restart to update to {version}', 'ចាប់ផ្ដើមឡើងវិញដើម្បីដំឡើង {version}'],
     ['updatesCurrent', 'Drag Shelf is up to date', 'Drag Shelf ជាកំណែថ្មីបំផុត'],
     ['updateAvailable', 'A new Drag Shelf is available', 'មានកំណែថ្មីរបស់ Drag Shelf'],
     ['updateDetail', 'Version {version} is ready. Download it and install it to update. Your shelves are kept.', 'កំណែ {version} រួចរាល់ហើយ។ ទាញយក និងដំឡើងដើម្បីធ្វើបច្ចុប្បន្នភាព។ ធ្នើរបស់អ្នកត្រូវបានរក្សាទុក។'],

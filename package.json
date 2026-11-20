@@ -1,7 +1,7 @@
 {
   "name": "dragshelf",
   "productName": "Drag Shelf",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "A temporary shelf for files, links, text and images. Shake while dragging and drop it on the shelf.",
   "main": "src/main/main.js",
   "license": "MIT",

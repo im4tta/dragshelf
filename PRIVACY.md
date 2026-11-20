@@ -36,7 +36,7 @@ Drag Shelf does not require an account, include advertising or analytics, or upl
 
 ## External links and support
 
-Starting with version 1.4, packaged desktop builds check the public GitHub releases API after startup and daily. GitHub receives your IP address and app version in the request header; shelf contents and file paths are not sent. Disable automatic checks in the tray/menu-bar menu. Manual checks still contact GitHub. Selecting Download update opens a GitHub download in your browser.
+Starting with version 1.4, packaged desktop builds check the public GitHub releases API after startup and daily. GitHub receives your IP address and app version in the request header; shelf contents and file paths are not sent. Disable automatic checks in the tray/menu-bar menu. Manual checks still contact GitHub. From version 1.7, when a newer release exists, Drag Shelf downloads the matching installer from GitHub, verifies its SHA-256 checksum, and installs it when you restart or quit; turning off automatic updates stops background checks and downloads.
 
 Privacy and support menu items open GitHub in your browser. GitHub and your browser process those visits under their own policies. If you contact us or file a public issue, the information you choose to include is handled by the relevant email or GitHub service. Do not include private file contents in public issues.
 

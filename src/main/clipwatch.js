@@ -33,6 +33,46 @@ const isConcealed = entries => entries.some(e => e.types.some(t => CONCEALED.inc
 
 const bufferOf = async blob => Buffer.from(await blob.arrayBuffer());
 
+// Images: the web type first, then the native formats screenshot tools use (Windows Snipping Tool, Snip & Sketch,
+// ShareX, Office…: "PNG", CF_DIBV5 / CF_DIB bitmaps; macOS: public.png / public.tiff).
+const IMAGE_FORMATS = [
+  ['image/png', 'image/png'], [raw('PNG'), 'image/png'], [raw('public.png'), 'image/png'], [raw('image/png'), 'image/png'],
+  ['image/jpeg', 'image/jpeg'], [raw('JFIF'), 'image/jpeg'], [raw('public.jpeg'), 'image/jpeg'],
+  [raw('CF_DIBV5'), 'image/x-dib'], [raw('CF_DIB'), 'image/x-dib'], [raw('DeviceIndependentBitmap'), 'image/x-dib'], [raw('17'), 'image/x-dib'], [raw('8'), 'image/x-dib'],
+  [raw('public.tiff'), 'image/tiff'], [raw('NSTIFFPboardType'), 'image/tiff'], [raw('image/tiff'), 'image/tiff'], [raw('image/bmp'), 'image/bmp'],
+];
+function imageType(types) {
+  for (const [type, mime] of IMAGE_FORMATS) if (types.includes(type)) return { type, mime };
+  const any = types.find(t => t.startsWith('image/')); if (any) return { type: any, mime: any };
+  // Other native names for the same formats (they differ between Windows versions and apps).
+  const raw2 = types.find(t => /osclipboard;format="[^"]*(png|dib|bitmap|tiff)[^"]*"/i.test(t));
+  if (raw2) { const f = /format="([^"]*)"/.exec(raw2)[1].toLowerCase(); return { type: raw2, mime: f.includes('png') ? 'image/png' : f.includes('tiff') ? 'image/tiff' : 'image/x-dib' }; }
+  return null;
+}
+
+// A Windows device-independent bitmap (BITMAPINFOHEADER / BITMAPV5HEADER + pixels, 24 or 32 bpp) →
+// { width, height, bgra } top-down, ready for nativeImage.createFromBitmap.
+function dibToBitmap(buf) {
+  if (!buf || buf.length < 40) throw new Error('Not a bitmap');
+  const headerSize = buf.readUInt32LE(0), width = buf.readInt32LE(4), rawHeight = buf.readInt32LE(8), bpp = buf.readUInt16LE(14), compression = buf.readUInt32LE(16);
+  const height = Math.abs(rawHeight), topDown = rawHeight < 0, clrUsed = buf.readUInt32LE(32);
+  if (width <= 0 || height <= 0 || width > 32768 || height > 32768 || ![24, 32].includes(bpp) || ![0, 3, 6].includes(compression)) throw new Error('Unsupported bitmap');
+  const masksAfterHeader = headerSize === 40 && compression === 3 ? 12 : headerSize === 40 && compression === 6 ? 16 : 0;
+  const offset = headerSize + masksAfterHeader + clrUsed * 4, stride = Math.ceil((width * bpp) / 32) * 4;
+  if (buf.length < offset + stride * height) throw new Error('Truncated bitmap');
+  const out = Buffer.alloc(width * height * 4); let alpha = false;
+  for (let y = 0; y < height; y++) {
+    const src = offset + (topDown ? y : height - 1 - y) * stride;
+    for (let x = 0; x < width; x++) {
+      const s = src + x * (bpp / 8), d = (y * width + x) * 4;
+      out[d] = buf[s]; out[d + 1] = buf[s + 1]; out[d + 2] = buf[s + 2];
+      out[d + 3] = bpp === 32 ? buf[s + 3] : 255; if (bpp === 32 && buf[s + 3]) alpha = true;
+    }
+  }
+  if (bpp === 32 && !alpha) for (let i = 3; i < out.length; i += 4) out[i] = 255; // BI_RGB 32-bit usually leaves alpha at 0
+  return { width, height, bgra: out };
+}
+
 function sampleHash(buffer) {
   let h = buffer.length | 0;
   const step = Math.max(1, Math.floor(buffer.length / 4096));
@@ -54,10 +94,11 @@ async function readClipboard(clipboard, { skipConcealed = true } = {}) {
   }
   if (paths.length) { const unique = [...new Set(paths)]; return { sig: 'f:' + unique.join('|'), kind: 'files', paths: unique }; }
   for (const entry of entries) {
-    const mime = entry.types.find(t => t.startsWith('image/'));
-    if (!mime) continue;
-    const data = await bufferOf(await entry.getType(mime));
-    return { sig: `i:${mime}:${data.length}:${sampleHash(data)}`, kind: 'image', mime, data };
+    const found = imageType(entry.types);
+    if (!found) continue;
+    const data = await bufferOf(await entry.getType(found.type));
+    if (!data.length) continue;
+    return { sig: `i:${data.length}:${sampleHash(data)}`, kind: 'image', mime: found.mime, data };
   }
   const textOf = async type => { for (const e of entries) if (e.types.includes(type)) return (await e.getType(type)).text(); return ''; };
   let text = await textOf('text/plain');
@@ -91,4 +132,4 @@ class ClipWatcher {
   async resync() { await this.busy; this.last = (await this.safeRead()).sig; }
 }
 
-module.exports = { ClipWatcher, readClipboard, CONCEALED, parseUriList, parsePlistPaths, parseWindowsFileName };
+module.exports = { ClipWatcher, readClipboard, CONCEALED, dibToBitmap, imageType, parseUriList, parsePlistPaths, parseWindowsFileName };

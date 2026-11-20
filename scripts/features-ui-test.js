@@ -83,6 +83,24 @@ async function newWindow(app, trigger, match) {
     const names = (await require('../src/main/unzip').readZip(zipFile)).map(e => e.name);
     assert.equal(names.length, 4, JSON.stringify(names));
 
+    // Paste button with a screenshot copied the way Windows' Snipping Tool does it (a CF_DIBV5 bitmap, no image/png).
+    const beforePaste = await count();
+    await app.evaluate(({ clipboard, ClipboardItem }) => {
+      const header = 124, w = 3, h = 2, buf = Buffer.alloc(header + w * h * 4);
+      buf.writeUInt32LE(header, 0); buf.writeInt32LE(w, 4); buf.writeInt32LE(h, 8); buf.writeUInt16LE(1, 12); buf.writeUInt16LE(32, 14);
+      for (let i = 0; i < w * h; i++) { const o = header + i * 4; buf[o] = 0; buf[o + 1] = 0; buf[o + 2] = 255; } // BGRA red, alpha 0 (BI_RGB)
+      return clipboard.write([new ClipboardItem({ 'electron application/osclipboard;format="CF_DIBV5"': new Blob([buf]) })]);
+    });
+    await shelf.evaluate(() => window.__t.openPanel('history'));
+    await shelf.click('#pasteBtn');
+    await shelf.waitForFunction(n => window.__t.state().shelves[0].items.length === n + 1, beforePaste);
+    await shelf.evaluate(() => window.__t.openPanel(null));
+    const pastedImage = (await items())[beforePaste].path;
+    assert.match(path.basename(pastedImage), /^Image .*\.png$/);
+    const png = fs.readFileSync(pastedImage); assert.equal(png.readUInt32BE(16), 3); assert.equal(png.readUInt32BE(20), 2);
+    const firstPixel = await app.evaluate(({ nativeImage }, p) => [...nativeImage.createFromPath(p).toBitmap().subarray(0, 4)], pastedImage);
+    assert.deepEqual(firstPixel, [0, 0, 255, 255], 'red, opaque');
+
     // OCR: render Khmer + English text, put it on the shelf, copy the text out of the image.
     const sample = await shelf.evaluate(async () => {
       await document.fonts.load('34px "Noto Sans Khmer"');

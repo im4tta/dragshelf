@@ -169,3 +169,37 @@ test('OCR line grouping keeps columns apart', () => {
   const b = (x1, x2) => ({ x1, x2, y1: 0, y2: 20, classId: 1, score: 0.9 });
   assert.deepEqual(lineSegments([b(50, 90), b(0, 40), b(200, 260)]).map(s => [s.x1, s.x2]), [[0, 90], [200, 260]]);
 });
+
+// A 2×2 bitmap: red, green / blue, white (top row first in the expected output).
+function dib({ bpp = 24, topDown = false, v5 = false, alpha = 0 }) {
+  const header = v5 ? 124 : 40, stride = Math.ceil((2 * bpp) / 32) * 4, buf = Buffer.alloc(header + stride * 2);
+  buf.writeUInt32LE(header, 0); buf.writeInt32LE(2, 4); buf.writeInt32LE(topDown ? -2 : 2, 8); buf.writeUInt16LE(1, 12); buf.writeUInt16LE(bpp, 14);
+  const rows = [[[0, 0, 255], [0, 255, 0]], [[255, 0, 0], [255, 255, 255]]]; // BGR: red, green / blue, white
+  rows.forEach((row, y) => row.forEach((px, x) => { const r = topDown ? y : 1 - y, o = header + r * stride + x * (bpp / 8); buf[o] = px[0]; buf[o + 1] = px[1]; buf[o + 2] = px[2]; if (bpp === 32) buf[o + 3] = alpha; }));
+  return buf;
+}
+test('copied screenshots in Windows bitmap formats are decoded (24/32-bit, bottom-up/top-down, V5 header)', () => {
+  const expected = [0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255];
+  for (const opts of [{}, { topDown: true }, { bpp: 32 }, { bpp: 32, v5: true }, { bpp: 32, topDown: true, alpha: 255 }]) {
+    const { width, height, bgra } = C.dibToBitmap(dib(opts));
+    assert.equal(width, 2); assert.equal(height, 2); assert.deepEqual([...bgra], expected, JSON.stringify(opts));
+  }
+  assert.throws(() => C.dibToBitmap(Buffer.alloc(10)), /Not a bitmap/);
+  assert.throws(() => C.dibToBitmap(dib({}).subarray(0, 50)), /Truncated/);
+});
+test('image formats from screenshot tools are recognised, PNG preferred', () => {
+  const raw = f => `electron application/osclipboard;format="${f}"`;
+  assert.deepEqual(C.imageType([raw('CF_DIB'), raw('PNG'), 'text/plain']), { type: raw('PNG'), mime: 'image/png' });
+  assert.deepEqual(C.imageType([raw('CF_DIBV5')]), { type: raw('CF_DIBV5'), mime: 'image/x-dib' });
+  assert.deepEqual(C.imageType([raw('public.tiff')]), { type: raw('public.tiff'), mime: 'image/tiff' });
+  assert.equal(C.imageType([raw('image/x-bitmap-custom')]).mime, 'image/x-dib');
+  assert.equal(C.imageType(['text/plain']), null);
+});
+test('auto-paste picks up a screenshot copied as a Windows bitmap even when text is also on the clipboard', async () => {
+  const got = [], state = { entries: [{ 'text/plain': 'x' }] };
+  const w = new C.ClipWatcher({ clipboard: fakeClipboard(state), onCopy: s => got.push(s) });
+  await w.start(); w.stop();
+  state.entries = [{ 'electron application/osclipboard;format="CF_DIBV5"': dib({ bpp: 32, v5: true }), 'text/plain': 'caption' }];
+  await w.tick();
+  assert.equal(got[0].kind, 'image'); assert.equal(got[0].mime, 'image/x-dib');
+});

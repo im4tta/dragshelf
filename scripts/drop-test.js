@@ -11,6 +11,7 @@ const uri = pathToFileURL(source).href;
   const app = await electron.launch({ ...(process.env.DRAGSHELF_TEST_EXE ? { executablePath: process.env.DRAGSHELF_TEST_EXE } : {}), args: [root, '--no-sandbox'], env: { ...process.env, DRAGSHELF_TEST: '1', DRAGSHELF_USER_DATA: ud } });
   try {
     const page = await app.firstWindow(); await page.waitForSelector('#addTab');
+    await page.waitForFunction(() => window.__t && window.__t.state()); // shelf.js has run and has state, so the drop handler exists
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const drop = async (target, options = {}) => page.evaluate(({ target, uri, ...options }) => {
       const dt = new DataTransfer();
