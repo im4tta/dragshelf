@@ -675,6 +675,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     ...(IS_MAC ? [{ label: tr(hooksOn ? 'detectionOn' : 'enableDetection'), enabled: !hooksOn, click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility') }] : []),
     { label: tr('showGuide'), click: openGuide },
+    ...(updates && updates.ready ? [{ label: tr('restartToUpdate', { version: updates.ready.version }), click: () => updates.install(true) }] : []),
     { label: tr('checkUpdates'), click: () => updates && updates.check(true) },
     { label: tr('automaticUpdates'), type: 'checkbox', checked: st.updateChecks !== false, click: set('updateChecks', st.updateChecks === false) },
     { label: tr('privacy'), click: () => shell.openExternal(`https://github.com/im4tta/dragshelf/blob/main/PRIVACY${language() === 'km' ? '.km' : ''}.md`) },
@@ -831,7 +832,7 @@ app.on('second-instance', () => { if (shelfWin) showShelfAt(screen.getCursorScre
 app.on('window-all-closed', e => e.preventDefault && e.preventDefault());
 app.on('before-quit', event => {
   if (clipWatch) clipWatch.stop(); stopOcrWorker();
-  if (updates) updates.stop();
+  if (updates) { updates.stop(); updates.installOnQuit(); }
   if (store) store.flush(); if (phone) phone.stop(); if (watch) watch.stop(); if (IS_WIN) require('./windows-context').stop();
   if (deliveryJobs && deliveryJobs.busy) { event.preventDefault(); deliveryJobs.cancel(); deliveryJobs.pending.finally(() => app.quit()); }
 });
@@ -859,7 +860,7 @@ app.whenReady().then(() => {
   if (store.settings.autoPaste) ensureClipWatch().start(); // keeps pasting copies onto the shelf in the background
   screen.on('display-metrics-changed', () => { if (shelfWin) { const b = shelfWin.getBounds(); placeCard(b.x + PAD, b.y + PAD); pushState(); } });
   if (!TEST) {
-    updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr });
+    updates = new (require('./updates').Updates)({ app, dialog, shell, net, store, t: tr, notify: message => { if (shelfWin && !shelfWin.isDestroyed()) shelfWin.webContents.send('flash', message); } });
     createTray(); registerHotkey(store.settings.hotkey); registerQuickPaste(); startWatching();
     setInterval(() => { store.expireHistory(); }, 36e5);
     if (app.isPackaged) updates.start();

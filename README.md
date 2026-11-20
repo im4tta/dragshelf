@@ -17,7 +17,7 @@ Windows x64 · Apple Silicon · Intel · Universal &nbsp;|&nbsp; MIT licensed
 
 ## Download
 
-Version 1.4 and later checks GitHub for updates and offers the matching download. Use **Check for updates…** in the tray/menu-bar menu, or disable **Automatically check for updates** there. Install the downloaded file to finish updating. Versions 1.3.1 and earlier need one manual upgrade before receiving update prompts.
+Version 1.7 and later **updates itself**: new releases download in the background, are checksum-verified, and install with *Restart now* or the next time you quit (Windows installer, Windows portable and macOS). Use **Check for updates…** in the tray/menu-bar menu, or turn off **Automatically download and install updates**. Versions 1.4–1.6 open the download instead; install 1.7 once and later updates are automatic. [How updates work](docs/UPDATES.md)
 
 Grab the build for your computer from the **[Releases](../../releases)** page.
 

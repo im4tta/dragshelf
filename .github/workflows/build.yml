@@ -76,6 +76,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --mac --x64 --arm64 --universal --publish never -c.mac.notarize=true
 
+      - name: In-app update install check (unpack + bundle swap + signature)
+        run: node scripts/update-smoke.js
       - name: Show architectures
         run: |
           for d in dist/mac dist/mac-arm64 dist/mac-universal; do
@@ -114,6 +116,8 @@ jobs:
         run: npm run test:drop
       - name: Build shared UI installer and portable executable
         run: npx electron-builder --win --x64 --publish never
+      - name: In-app update install check (silent install, then silent update in place)
+        run: node scripts/update-smoke.js
       - name: Test packaged Windows application
         shell: powershell
         run: |
