@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **Copied screenshots paste onto the shelf.** Paste and Auto-paste now read images the way Windows screenshot tools put them on the clipboard (Snipping Tool, Print Screen, Snip & Sketch, ShareX: `PNG`, `CF_DIBV5`/`CF_DIB` bitmaps) and macOS TIFF/PNG, and save them as PNG. Previously only text and links were picked up there.
 - **Updates install themselves.** Drag Shelf now downloads new versions in the background, verifies them against GitHub's SHA-256 digests, and installs them with one click (**Restart now**) or automatically when you quit — no browser, no installer windows. Works for the Windows installer and portable builds and for macOS (including the current ad-hoc signed builds). Falls back to the download page only when it cannot update in place (for example when run from the DMG).
 
 ## 1.6.0

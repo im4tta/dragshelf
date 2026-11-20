@@ -138,13 +138,25 @@ function addClipboard(snap) {
   if (!snap || !snap.kind) return 0;
   let paths = [];
   if (snap.kind === 'files') paths = snap.paths.filter(p => fs.existsSync(p));
-  else if (snap.kind === 'image') paths = [stash.saveBlob(`Image ${require('./stash').timestamp()}.${(snap.mime.split('/')[1] || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '')}`, snap.data)];
+  else if (snap.kind === 'image') { const png = clipboardImageToFile(snap); if (png) paths = [stash.saveBlob(`Image ${require('./stash').timestamp()}.${png.ext}`, png.data)]; }
   else if (/^https?:\/\/\S+$/i.test(snap.text.trim())) paths = [stash.saveUrl(snap.text.trim())];
   else if (snap.text.trim()) paths = [stash.saveText(snap.text)];
   if (!paths.length) return 0;
   store.checkpoint(); const n = store.addRouted(paths).added; store.settle(); pushState();
   if (snap.kind === 'image') paths.forEach(autoOcr);
   return n;
+}
+// Copied images arrive as PNG/JPEG, a Windows bitmap (CF_DIB) or a macOS TIFF; the shelf keeps PNG or JPEG.
+function clipboardImageToFile(snap) {
+  if (snap.mime === 'image/png') return { ext: 'png', data: snap.data };
+  if (snap.mime === 'image/jpeg') return { ext: 'jpg', data: snap.data };
+  let image;
+  try {
+  if (snap.mime === 'image/x-dib') { const { width, height, bgra } = require('./clipwatch').dibToBitmap(snap.data); image = nativeImage.createFromBitmap(bgra, { width, height }); }
+  else if (snap.mime === 'image/bmp') { const { width, height, bgra } = require('./clipwatch').dibToBitmap(snap.data.subarray(14)); image = nativeImage.createFromBitmap(bgra, { width, height }); }
+  else image = nativeImage.createFromBuffer(snap.data);
+  } catch (_) { return null; } // not an image we can read
+  return image && !image.isEmpty() ? { ext: 'png', data: image.toPNG() } : null;
 }
 function ensureClipWatch() { if (!clipWatch) clipWatch = new ClipWatcher({ clipboard, onCopy: addClipboard, options: () => ({ skipConcealed: store.settings.skipConcealed !== false }) }); return clipWatch; }
 function setAutoPaste(on) {

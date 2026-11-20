@@ -114,6 +114,8 @@ jobs:
         run: npm run test:delivery
       - name: Filesystem drop recovery checks
         run: npm run test:drop
+      - name: Pasting a copied screenshot (real Windows clipboard bitmap)
+        run: node scripts/clipboard-image-test.js
       - name: Build shared UI installer and portable executable
         run: npx electron-builder --win --x64 --publish never
       - name: In-app update install check (silent install, then silent update in place)
