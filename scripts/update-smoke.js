@@ -40,10 +40,16 @@ async function mac() {
   execFileSync('/bin/sh', [script], { stdio: 'inherit' });
   assert.ok(!fs.existsSync(path.join(target, 'Contents', 'old-marker')), 'bundle replaced');
   assert.match(fs.readFileSync(path.join(target, 'Contents', 'Info.plist'), 'utf8'), new RegExp(`<string>${pkg.version.replace(/\./g, '\\.')}</string>`));
-  execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', target], { stdio: 'inherit' });
+  // The swap must not change the signature state: verify the updated bundle exactly as the freshly built one.
+  // (Ad-hoc builds without an Apple Developer ID do not pass --strict; Developer-ID builds must, and then both pass.)
+  const verify = app => { try { execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app], { stdio: 'pipe' }); return 'valid'; } catch (e) { return String(e.stderr || e.message).replace(/^.*?\.app: /m, '').trim(); } };
+  const before = verify(built), after = verify(target);
+  console.log('codesign (built):', before, '| (updated):', after);
+  assert.equal(after, before, 'updated bundle has the same signature state as the build');
+  execFileSync('/usr/bin/codesign', ['--verify', path.join(target, 'Contents', 'MacOS', 'Drag Shelf')], { stdio: 'inherit' }); // main executable signature intact
   assert.deepEqual(fs.readdirSync(path.dirname(target)), ['Drag Shelf.app']);
   fs.rmSync(root, { recursive: true, force: true });
-  console.log('PASS macOS unpack + bundle swap + signature check:', zip);
+  console.log('PASS macOS unpack + version check + bundle swap + signature unchanged:', zip);
 }
 
 (process.platform === 'win32' ? windows() : process.platform === 'darwin' ? mac() : Promise.resolve(console.log('skip: no in-place updater on', process.platform)))
