@@ -46,7 +46,8 @@ async function mac() {
   const before = verify(built), after = verify(target);
   console.log('codesign (built):', before, '| (updated):', after);
   assert.equal(after, before, 'updated bundle has the same signature state as the build');
-  execFileSync('/usr/bin/codesign', ['--verify', path.join(target, 'Contents', 'MacOS', 'Drag Shelf')], { stdio: 'inherit' }); // main executable signature intact
+  const exe = p => fs.readFileSync(path.join(p, 'Contents', 'MacOS', 'Drag Shelf'));
+  assert.ok(exe(target).equals(exe(built)), 'updated executable is byte-identical to the build');
   assert.deepEqual(fs.readdirSync(path.dirname(target)), ['Drag Shelf.app']);
   fs.rmSync(root, { recursive: true, force: true });
   console.log('PASS macOS unpack + version check + bundle swap + signature unchanged:', zip);
